@@ -1,0 +1,2397 @@
+/* =====================================================
+   ABSENSI KARTU PELAJAR
+   SMP & SMA BAITUL ULUM BOARDING SCHOOL
+   STYLE.CSS FINAL
+===================================================== */
+
+
+/* =====================================================
+   RESET
+===================================================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+
+html {
+  scroll-behavior: smooth;
+}
+
+
+body {
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  color: #0f172a;
+
+  min-height: 100vh;
+
+  background: #f1f5f9;
+}
+
+
+/* =====================================================
+   CONTAINER UTAMA
+===================================================== */
+
+.container {
+  width: calc(100% - 30px);
+
+  max-width: 700px;
+
+  margin: 20px auto;
+}
+
+
+/* =====================================================
+   HEADER SEKOLAH
+   BACKGROUND GEDUNG HANYA DI SINI
+===================================================== */
+
+.header {
+
+  position: relative;
+
+  overflow: hidden;
+
+  color: #ffffff;
+
+  padding: 28px 20px 22px;
+
+  border-radius: 20px;
+
+  margin-bottom: 18px;
+
+  background-image:
+
+    linear-gradient(
+      rgba(15, 118, 110, 0.78),
+      rgba(15, 23, 42, 0.82)
+    ),
+
+    url("https://raw.githubusercontent.com/variantechid-cell/SAD-BaitulUlum/f3eca4034fa1897a99e53b0be8a2af63393a90d2/bgweb.jpeg");
+
+  background-size: cover;
+
+  background-position: center 48%;
+
+  background-repeat: no-repeat;
+
+  box-shadow:
+    0 6px 22px
+    rgba(15, 23, 42, 0.20);
+}
+
+
+/* =====================================================
+   JUDUL SEKOLAH
+===================================================== */
+
+.school-title {
+
+  position: relative;
+
+  z-index: 2;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 45px;
+
+  margin: 0 0 9px;
+
+  font-size:
+    clamp(
+      20px,
+      4vw,
+      30px
+    );
+
+  font-weight: 800;
+
+  text-align: center;
+
+  line-height: 1.2;
+
+  letter-spacing: 0.3px;
+}
+
+
+/* =====================================================
+   LOGO SEKOLAH
+===================================================== */
+
+.school-logo {
+
+  width: 58px;
+
+  height: 58px;
+
+  min-width: 58px;
+
+  object-fit: contain;
+
+  background: #ffffff;
+
+  border-radius: 50%;
+
+  padding: 5px;
+
+  box-shadow:
+    0 3px 12px
+    rgba(0, 0, 0, 0.25);
+}
+
+
+/* =====================================================
+   NAMA SEKOLAH
+===================================================== */
+
+.school-name {
+
+  position: relative;
+
+  z-index: 2;
+
+  text-align: center;
+
+  font-size: 14px;
+
+  font-weight: 400;
+
+  letter-spacing: 0.8px;
+
+  color: #ffffff;
+
+  margin-top: 3px;
+
+  text-shadow:
+    0 2px 5px
+    rgba(0, 0, 0, 0.35);
+}
+
+
+/* =====================================================
+   TANGGAL & WAKTU
+===================================================== */
+
+.datetime {
+
+  position: relative;
+
+  z-index: 2;
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  gap: 10px;
+
+  margin-top: 17px;
+}
+
+
+.datetime > div {
+
+  background:
+    rgba(255, 255, 255, 0.16);
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.25);
+
+  backdrop-filter:
+    blur(5px);
+
+  -webkit-backdrop-filter:
+    blur(5px);
+
+  padding: 7px 12px;
+
+  border-radius: 10px;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  box-shadow:
+    0 2px 8px
+    rgba(0, 0, 0, 0.12);
+}
+
+
+/* =====================================================
+   SCANNER CARD
+===================================================== */
+
+.scanner-card {
+
+  background: #ffffff;
+
+  border-radius: 18px;
+
+  padding: 20px;
+
+  margin-bottom: 15px;
+
+  box-shadow:
+    0 4px 18px
+    rgba(15, 23, 42, 0.08);
+}
+
+
+/* =====================================================
+   READER / KAMERA
+===================================================== */
+
+#reader {
+
+  width: 100%;
+
+  max-width: 450px;
+
+  margin: auto;
+
+  overflow: hidden;
+
+  border-radius: 14px;
+
+  background: #0f172a;
+}
+
+
+#reader video {
+
+  width: 100% !important;
+
+  height: auto !important;
+
+  display: block;
+
+  border-radius: 12px;
+}
+
+
+#reader img {
+
+  max-width: 100%;
+}
+
+
+/* =====================================================
+   STATUS SCANNER
+===================================================== */
+
+.status {
+
+  margin-top: 13px;
+
+  padding: 12px;
+
+  border-radius: 10px;
+
+  background: #f1f5f9;
+
+  color: #475569;
+
+  text-align: center;
+
+  font-size: 13px;
+
+  font-weight: 700;
+
+  line-height: 1.4;
+}
+
+
+/* =====================================================
+   TOMBOL
+   Tidak mengubah fungsi maupun tata letak HTML
+===================================================== */
+
+.buttons {
+
+  width: 100%;
+}
+
+
+.buttons button {
+
+  width: 100%;
+
+  border: none;
+
+  border-radius: 12px;
+
+  padding: 14px 18px;
+
+  margin-top: 14px;
+
+  background: #0f766e;
+
+  color: #ffffff;
+
+  font-size: 14px;
+
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+
+.buttons button:hover {
+
+  background: #115e59;
+
+  box-shadow:
+    0 5px 12px
+    rgba(15, 118, 110, 0.25);
+}
+
+
+.buttons button:active {
+
+  transform: scale(0.98);
+}
+
+
+/* =====================================================
+   AUTO SCAN
+===================================================== */
+
+.auto-scan-control {
+
+  margin-top: 15px;
+
+  padding: 11px 13px;
+
+  border-radius: 10px;
+
+  background: #f8fafc;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 9px;
+
+  font-size: 13px;
+
+  font-weight: 700;
+
+  color: #334155;
+}
+
+
+.auto-scan-control label {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  cursor: pointer;
+}
+
+
+.auto-scan-control input {
+
+  width: 17px;
+
+  height: 17px;
+
+  cursor: pointer;
+}
+
+
+.auto-label {
+
+  color: #16a34a;
+
+  font-size: 11px;
+
+  font-weight: 800;
+}
+
+
+/* =====================================================
+   HASIL ABSENSI
+===================================================== */
+
+.result {
+
+  display: none;
+
+  background: #ffffff;
+
+  border-radius: 18px;
+
+  padding: 20px;
+
+  margin-bottom: 15px;
+
+  text-align: center;
+
+  box-shadow:
+    0 4px 18px
+    rgba(15, 23, 42, 0.08);
+}
+
+
+/* =====================================================
+   ICON HASIL
+===================================================== */
+
+.result-icon {
+
+  font-size: 58px;
+
+  line-height: 1;
+
+  margin-bottom: 8px;
+}
+
+
+.result h2 {
+
+  font-size: 21px;
+
+  font-weight: 800;
+}
+
+
+.result-message {
+
+  margin-top: 7px;
+
+  color: #64748b;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+
+.student-id {
+
+  margin-top: 17px;
+
+  padding: 15px;
+
+  border-radius: 12px;
+
+  background: #f8fafc;
+
+  font-size: 20px;
+
+  font-weight: 800;
+
+  line-height: 1.5;
+
+  word-break: break-word;
+}
+
+
+/* =====================================================
+   STATUS HASIL
+===================================================== */
+
+.result.success {
+
+  border-top:
+    6px solid #16a34a;
+}
+
+
+.result.late {
+
+  border-top:
+    6px solid #eab308;
+}
+
+
+.result.already {
+
+  border-top:
+    6px solid #f97316;
+}
+
+
+.result.error {
+
+  border-top:
+    6px solid #dc2626;
+}
+
+
+/* =====================================================
+   RINGKASAN ABSENSI
+===================================================== */
+
+.summary-grid {
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap: 10px;
+
+  width: 100%;
+
+  margin: 20px 0;
+}
+
+
+.summary-card {
+
+  background: #ffffff;
+
+  border-radius: 16px;
+
+  padding: 15px 8px;
+
+  text-align: center;
+
+  box-shadow:
+    0 4px 15px
+    rgba(15, 23, 42, 0.08);
+
+  transition:
+    transform 0.15s ease;
+}
+
+
+.summary-card:hover {
+
+  transform:
+    translateY(-2px);
+}
+
+
+.summary-icon {
+
+  font-size: 25px;
+
+  line-height: 1;
+
+  margin-bottom: 7px;
+}
+
+
+.summary-label {
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  color: #64748b;
+
+  letter-spacing: 0.4px;
+}
+
+
+.summary-number {
+
+  font-size: 29px;
+
+  font-weight: 800;
+
+  margin-top: 4px;
+
+  color: #0f172a;
+}
+
+
+/* =====================================================
+   SECTION ABSENSI HARI INI
+===================================================== */
+
+.attendance-section {
+
+  width: 100%;
+
+  margin-top: 20px;
+
+  background: #ffffff;
+
+  border-radius: 18px;
+
+  padding: 20px;
+
+  box-shadow:
+    0 4px 18px
+    rgba(15, 23, 42, 0.08);
+}
+
+
+/* =====================================================
+   HEADER ABSENSI
+===================================================== */
+
+.attendance-header {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: flex-start;
+
+  gap: 15px;
+
+  margin-bottom: 15px;
+}
+
+
+.attendance-header h2 {
+
+  font-size: 19px;
+
+  font-weight: 800;
+
+  color: #0f172a;
+
+  line-height: 1.3;
+}
+
+
+.attendance-date-text {
+
+  margin-top: 5px;
+
+  color: #64748b;
+
+  font-size: 12px;
+
+  font-weight: 600;
+}
+
+
+/* =====================================================
+   TOOLS ABSENSI
+===================================================== */
+
+.attendance-tools {
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: flex-end;
+
+  flex-wrap: wrap;
+
+  gap: 7px;
+}
+
+
+.attendance-tools select {
+
+  padding: 8px 10px;
+
+  border:
+    1px solid #cbd5e1;
+
+  border-radius: 8px;
+
+  background: #ffffff;
+
+  color: #334155;
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+
+.attendance-tools button {
+
+  border: none;
+
+  border-radius: 8px;
+
+  padding: 8px 11px;
+
+  background: #0f766e;
+
+  color: #ffffff;
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease;
+}
+
+
+.attendance-tools button:hover {
+
+  background: #115e59;
+}
+
+
+/* =====================================================
+   TOTAL BOX
+===================================================== */
+
+.total-box {
+
+  padding: 8px 11px;
+
+  border-radius: 8px;
+
+  background: #f0fdfa;
+
+  color: #0f766e;
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+
+.total-box span {
+
+  font-size: 14px;
+
+  font-weight: 800;
+
+  margin-left: 3px;
+}
+
+
+/* =====================================================
+   INFORMASI ABSENSI
+===================================================== */
+
+.attendance-info {
+
+  margin-bottom: 12px;
+
+  padding: 9px 11px;
+
+  border-radius: 9px;
+
+  background: #f8fafc;
+
+  color: #64748b;
+
+  font-size: 12px;
+
+  text-align: center;
+}
+
+
+/* =====================================================
+   LOADING
+===================================================== */
+
+.loading {
+
+  padding: 30px 15px;
+
+  text-align: center;
+
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+
+/* =====================================================
+   TABEL ABSENSI DESKTOP
+===================================================== */
+
+.attendance-desktop {
+
+  width: 100%;
+}
+
+
+.attendance-table-wrapper {
+
+  width: 100%;
+
+  overflow-x: auto;
+
+  border:
+    1px solid #e2e8f0;
+
+  border-radius: 12px;
+}
+
+
+.attendance-table {
+
+  width: 100%;
+
+  border-collapse: collapse;
+
+  min-width: 600px;
+
+  background: #ffffff;
+}
+
+
+.attendance-table thead {
+
+  background: #f8fafc;
+}
+
+
+.attendance-table th {
+
+  padding: 12px 13px;
+
+  text-align: left;
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  color: #475569;
+
+  border-bottom:
+    1px solid #e2e8f0;
+}
+
+
+.attendance-table td {
+
+  padding: 11px 13px;
+
+  font-size: 13px;
+
+  color: #334155;
+
+  border-bottom:
+    1px solid #f1f5f9;
+}
+
+
+.attendance-table tbody tr {
+
+  transition:
+    background 0.2s ease;
+}
+
+
+.attendance-table tbody tr:hover {
+
+  background: #f8fafc;
+}
+
+
+.attendance-table tbody tr:last-child td {
+
+  border-bottom: none;
+}
+
+
+.rank-column {
+
+  width: 55px;
+
+  text-align: center !important;
+}
+
+
+/* =====================================================
+   RANK
+===================================================== */
+
+.rank-number {
+
+  display: inline-flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  min-width: 30px;
+
+  height: 30px;
+
+  font-size: 13px;
+
+  font-weight: 700;
+}
+
+
+.rank-medal {
+
+  font-size: 23px;
+
+  line-height: 1;
+}
+
+
+/* =====================================================
+   NAMA SISWA
+===================================================== */
+
+.student-name {
+
+  font-weight: 700;
+
+  color: #0f172a;
+}
+
+
+.student-class {
+
+  font-weight: 600;
+
+  color: #475569;
+}
+
+
+/* =====================================================
+   JAM ABSENSI
+===================================================== */
+
+.attendance-time {
+
+  font-family:
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  font-weight: 600;
+
+  color: #334155;
+}
+
+
+/* =====================================================
+   STATUS BADGE
+===================================================== */
+
+.status-badge {
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  padding: 5px 9px;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+
+  font-weight: 700;
+}
+
+
+.status-hadir {
+
+  background: #dcfce7;
+
+  color: #15803d;
+}
+
+
+.status-terlambat {
+
+  background: #fef3c7;
+
+  color: #b45309;
+}
+
+
+.status-other {
+
+  background: #e2e8f0;
+
+  color: #475569;
+}
+
+
+/* =====================================================
+   MOBILE ATTENDANCE
+===================================================== */
+
+.attendance-mobile {
+
+  display: none;
+}
+
+
+.attendance-card-list {
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 9px;
+}
+
+
+.attendance-card {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 11px;
+
+  padding: 12px;
+
+  background: #ffffff;
+
+  border:
+    1px solid #e2e8f0;
+
+  border-radius: 12px;
+
+  box-shadow:
+    0 2px 7px
+    rgba(15, 23, 42, 0.05);
+}
+
+
+.attendance-card-rank {
+
+  width: 38px;
+
+  min-width: 38px;
+
+  height: 38px;
+
+  display: flex;
+
+  justify-content: center;
+
+  align-items: center;
+
+  font-weight: 700;
+
+  color: #475569;
+}
+
+
+.attendance-card-rank.medal {
+
+  font-size: 25px;
+}
+
+
+.attendance-card-content {
+
+  flex: 1;
+
+  min-width: 0;
+}
+
+
+.attendance-card-name {
+
+  font-size: 14px;
+
+  font-weight: 700;
+
+  color: #0f172a;
+
+  white-space: nowrap;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+}
+
+
+.attendance-card-class {
+
+  margin-top: 2px;
+
+  font-size: 11px;
+
+  color: #64748b;
+}
+
+
+.attendance-card-bottom {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  gap: 8px;
+
+  margin-top: 6px;
+}
+
+
+.attendance-card-time {
+
+  font-size: 11px;
+
+  font-weight: 600;
+
+  color: #475569;
+}
+
+
+.attendance-card-status {
+
+  flex-shrink: 0;
+}
+
+
+/* =====================================================
+   SISWA PERTAMA
+===================================================== */
+
+.attendance-card:first-child {
+
+  border-color: #99f6e4;
+
+  background:
+    linear-gradient(
+      135deg,
+      #f0fdfa,
+      #ffffff
+    );
+}
+
+
+/* =====================================================
+   MOBILE 768px
+===================================================== */
+
+@media (max-width: 768px) {
+
+  .container {
+
+    width: calc(100% - 16px);
+
+    margin:
+      10px auto 15px;
+  }
+
+
+  /* HEADER */
+
+  .header {
+
+    padding:
+      23px 14px 18px;
+
+    border-radius:
+      16px;
+
+    background-position:
+      center center;
+  }
+
+
+  .school-title {
+
+    font-size:
+      clamp(
+        18px,
+        5vw,
+        25px
+      );
+
+    gap: 10px;
+    position: center;
+  }
+
+
+  .school-logo {
+
+    width: 50px;
+
+    height: 50px;
+
+    min-width: 50px;
+  }
+
+
+  .school-name {
+
+    font-size: 11px;
+
+    letter-spacing: 0.5px;
+
+    line-height: 1.4;
+  }
+
+
+  .datetime {
+
+    margin-top: 13px;
+
+    gap: 6px;
+  }
+
+
+  .datetime > div {
+
+    padding:
+      6px 9px;
+
+    font-size: 10px;
+  }
+
+
+  /* SCANNER */
+
+  .scanner-card {
+
+    padding: 15px;
+
+    border-radius: 15px;
+  }
+
+
+  /* SUMMARY */
+
+  .summary-grid {
+
+    grid-template-columns:
+      repeat(2, 1fr);
+
+    gap: 9px;
+
+    margin: 15px 0;
+  }
+
+
+  .summary-card {
+
+    padding: 13px 7px;
+  }
+
+
+  .summary-number {
+
+    font-size: 25px;
+  }
+
+
+  /* ATTENDANCE */
+
+  .attendance-section {
+
+    margin-top: 15px;
+
+    padding: 15px;
+
+    border-radius: 15px;
+  }
+
+
+  .attendance-header {
+
+    flex-direction: column;
+
+    align-items: stretch;
+
+    gap: 10px;
+  }
+
+
+  .attendance-header h2 {
+
+    font-size: 17px;
+  }
+
+
+  .attendance-tools {
+
+    justify-content: space-between;
+  }
+
+
+  .attendance-tools select {
+
+    flex: 1;
+
+    max-width: 150px;
+  }
+
+
+  .total-box {
+
+    flex: 1;
+
+    text-align: center;
+  }
+
+
+  /* TABLE DESKTOP HIDDEN */
+
+  .attendance-desktop {
+
+    display: none !important;
+  }
+
+
+  /* MOBILE CARD SHOW */
+
+  .attendance-mobile {
+
+    display: block !important;
+  }
+
+}
+
+
+/* =====================================================
+   HP KECIL 480px
+===================================================== */
+
+@media (max-width: 480px) {
+
+  .container {
+
+    width:
+      calc(100% - 12px);
+
+    margin-top: 7px;
+  }
+
+
+  .header {
+
+    padding:
+      20px 10px 16px;
+
+    border-radius:
+      14px;
+  }
+
+
+  .school-title {
+
+    gap: 8px;
+
+    font-size: 18px;
+
+    line-height: 1.15;
+  }
+
+
+  .school-logo {
+
+    width: 45px;
+
+    height: 45px;
+
+    min-width: 45px;
+
+    padding: 4px;
+  }
+
+
+  .school-name {
+
+    font-size: 9px;
+
+    letter-spacing: 0.3px;
+  }
+
+
+  .datetime {
+
+    gap: 5px;
+
+    flex-wrap: wrap;
+
+    margin-top: 11px;
+  }
+
+
+  .datetime > div {
+
+    padding:
+      5px 8px;
+
+    font-size: 9px;
+  }
+
+
+  /* SCANNER */
+
+  .scanner-card {
+
+    padding: 12px;
+
+    border-radius: 14px;
+  }
+
+
+  .status {
+
+    padding: 10px;
+
+    font-size: 12px;
+  }
+
+
+  .buttons button {
+
+    padding:
+      13px 15px;
+
+    font-size: 13px;
+  }
+
+
+  /* SUMMARY */
+
+  .summary-card {
+
+    padding: 11px 5px;
+
+    border-radius: 13px;
+  }
+
+
+  .summary-icon {
+
+    font-size: 22px;
+  }
+
+
+  .summary-label {
+
+    font-size: 9px;
+  }
+
+
+  .summary-number {
+
+    font-size: 23px;
+  }
+
+
+  /* RESULT */
+
+  .result {
+
+    padding: 14px;
+
+    border-radius: 14px;
+  }
+
+
+  .result-icon {
+
+    font-size: 48px;
+  }
+
+
+  .result h2 {
+
+    font-size: 19px;
+  }
+
+
+  .student-id {
+
+    font-size: 17px;
+
+    padding: 13px;
+  }
+
+
+  /* ATTENDANCE */
+
+  .attendance-section {
+
+    padding: 12px;
+
+    border-radius: 14px;
+  }
+
+
+  .attendance-header h2 {
+
+    font-size: 16px;
+  }
+
+
+  .attendance-tools {
+
+    gap: 5px;
+  }
+
+
+  .attendance-tools select {
+
+    max-width: 120px;
+
+    font-size: 11px;
+
+    padding: 7px;
+  }
+
+
+  .attendance-tools button {
+
+    font-size: 10px;
+
+    padding:
+      7px 8px;
+  }
+
+
+  .total-box {
+
+    font-size: 10px;
+
+    padding:
+      7px 8px;
+  }
+
+
+  .attendance-card {
+
+    padding: 10px;
+
+    gap: 8px;
+
+    border-radius: 11px;
+  }
+
+
+  .attendance-card-rank {
+
+    width: 34px;
+
+    min-width: 34px;
+
+    height: 34px;
+  }
+
+
+  .attendance-card-rank.medal {
+
+    font-size: 22px;
+  }
+
+
+  .attendance-card-name {
+
+    font-size: 13px;
+  }
+
+
+  .attendance-card-class {
+
+    font-size: 10px;
+  }
+
+
+  .attendance-card-time {
+
+    font-size: 10px;
+  }
+
+
+  .status-badge {
+
+    padding:
+      4px 7px;
+
+    font-size: 9px;
+  }
+
+}
+
+
+/* =====================================================
+   HP SANGAT KECIL
+===================================================== */
+
+@media (max-width: 360px) {
+
+  .school-title {
+
+    font-size: 16px;
+  }
+
+
+  .school-logo {
+
+    width: 40px;
+
+    height: 40px;
+
+    min-width: 40px;
+  }
+
+
+  .school-name {
+
+    font-size: 8px;
+  }
+
+
+  .summary-number {
+
+    font-size: 21px;
+  }
+
+
+  .attendance-tools button {
+
+    display: none;
+  }
+
+}
+
+
+/* TAMBAHAN FASE 2 & 3 */
+.jadwal-group {
+  margin-bottom: 15px;
+  text-align: left;
+}
+.jadwal-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+.wa-status-badge {
+  display: none;
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+  text-align: center;
+  font-weight: bold;
+}
+.wa-status-badge.success {
+  display: block;
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+.wa-status-badge.failed {
+  display: block;
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* ============================================================
+   LOGIN & DASHBOARD GURU
+   V7.0
+============================================================ */
+
+
+/* ============================================================
+   HEADER LOGIN
+============================================================ */
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+
+.login-button,
+.logout-button {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  
+}
+
+
+.login-button {
+  background: rgba(255,255,255,0.15);
+  color: #ffffff;
+}
+
+
+.logout-button {
+  background: #fee2e2;
+  color: #b91c1c;
+  text-align: right;
+}
+
+
+/* ============================================================
+   LOGIN MODAL
+============================================================ */
+
+.login-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 20px;
+
+  background:
+    rgba(15,23,42,0.60);
+
+  backdrop-filter: blur(5px);
+}
+
+
+.login-box {
+  position: relative;
+
+  width: 100%;
+  max-width: 390px;
+
+  background: #ffffff;
+
+  border-radius: 20px;
+
+  padding: 28px;
+
+  box-shadow:
+    0 20px 60px
+    rgba(15,23,42,0.25);
+}
+
+
+.login-close {
+  position: absolute;
+
+  top: 12px;
+  right: 15px;
+
+  border: none;
+  background: transparent;
+
+  font-size: 27px;
+
+  color: #64748b;
+
+  cursor: pointer;
+}
+
+
+.login-icon {
+  width: 55px;
+  height: 55px;
+
+  margin: 0 auto 12px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 15px;
+
+  background: #eff6ff;
+
+  font-size: 26px;
+}
+
+
+.login-box h2 {
+  text-align: center;
+
+  color: #0f172a;
+
+  font-size: 22px;
+}
+
+
+.login-box > p {
+  text-align: center;
+
+  margin-top: 5px;
+  margin-bottom: 22px;
+
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+
+.login-box label {
+  display: block;
+
+  margin-top: 13px;
+  margin-bottom: 6px;
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  color: #334155;
+}
+
+
+.login-box input {
+  width: 100%;
+
+  padding: 12px 13px;
+
+  border:
+    1px solid #cbd5e1;
+
+  border-radius: 10px;
+
+  outline: none;
+
+  font-size: 14px;
+}
+
+
+.login-box input:focus {
+  border-color: #2563eb;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(37,99,235,0.10);
+}
+
+
+.login-submit {
+  width: 100%;
+
+  margin-top: 18px;
+
+  border: none;
+
+  border-radius: 11px;
+
+  padding: 13px;
+
+  background: #2563eb;
+
+  color: #ffffff;
+
+  font-size: 14px;
+
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+
+.login-message {
+  min-height: 20px;
+
+  margin-top: 10px;
+
+  text-align: center;
+
+  color: #dc2626;
+
+  font-size: 12px;
+}
+
+
+/* ============================================================
+   DASHBOARD
+============================================================ */
+
+.dashboard {
+  margin-top: 18px;
+}
+
+
+.dashboard-header {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 15px;
+
+  padding: 20px;
+
+  margin-bottom: 15px;
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #0f766e,
+      #115e59
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 5px 20px
+    rgba(15,118,110,0.20);
+}
+
+
+.dashboard-kicker {
+  font-size: 10px;
+
+  font-weight: 800;
+
+  letter-spacing: 1px;
+
+  opacity: 0.8;
+}
+
+
+.dashboard-header h2 {
+  margin-top: 4px;
+
+  font-size: 20px;
+}
+
+
+.dashboard-user {
+  margin-top: 4px;
+
+  font-size: 12px;
+
+  opacity: 0.8;
+}
+
+
+.dashboard-section {
+  background: #ffffff;
+
+  border-radius: 18px;
+
+  padding: 20px;
+
+  margin-bottom: 15px;
+
+  box-shadow:
+    0 4px 18px
+    rgba(15,23,42,0.08);
+}
+
+
+.section-title h3 {
+  font-size: 17px;
+
+  color: #0f172a;
+}
+
+
+.section-title p {
+  margin-top: 5px;
+
+  color: #64748b;
+
+  font-size: 12px;
+}
+
+
+/* ============================================================
+   SCHEDULE LIST
+============================================================ */
+
+.schedule-list {
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, 1fr);
+
+  gap: 10px;
+
+  margin-top: 15px;
+}
+
+
+.schedule-item {
+  border:
+    1px solid #e2e8f0;
+
+  border-radius: 14px;
+
+  padding: 14px;
+
+  cursor: pointer;
+
+  transition:
+    0.2s ease;
+}
+
+
+.schedule-item:hover {
+  border-color: #0f766e;
+
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 5px 15px
+    rgba(15,118,110,0.10);
+}
+
+
+.schedule-time {
+  font-size: 12px;
+
+  font-weight: 800;
+
+  color: #0f766e;
+}
+
+
+.schedule-mapel {
+  margin-top: 7px;
+
+  font-size: 16px;
+
+  font-weight: 800;
+
+  color: #0f172a;
+}
+
+
+.schedule-class {
+  margin-top: 4px;
+
+  font-size: 12px;
+
+  color: #64748b;
+}
+
+
+.schedule-teacher {
+  margin-top: 7px;
+
+  font-size: 11px;
+
+  color: #475569;
+}
+
+
+/* ============================================================
+   TEACHER STATS
+============================================================ */
+
+.teacher-stats {
+  display: grid;
+
+  grid-template-columns:
+    repeat(6, 1fr);
+
+  gap: 8px;
+
+  margin: 15px 0;
+}
+
+
+.teacher-stat {
+  padding: 10px 6px;
+
+  text-align: center;
+
+  border-radius: 11px;
+
+  background: #f8fafc;
+}
+
+
+.teacher-stat strong {
+  display: block;
+
+  font-size: 19px;
+}
+
+
+.teacher-stat span {
+  display: block;
+
+  margin-top: 3px;
+
+  font-size: 9px;
+
+  color: #64748b;
+
+  font-weight: 700;
+}
+
+
+/* ============================================================
+   STUDENT LIST
+============================================================ */
+
+.teacher-student-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+
+.teacher-student {
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 12px;
+
+  border:
+    1px solid #e2e8f0;
+
+  border-radius: 12px;
+}
+
+
+.teacher-student-number {
+  width: 32px;
+
+  min-width: 32px;
+
+  height: 32px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #f1f5f9;
+
+  color: #475569;
+
+  font-size: 12px;
+
+  font-weight: 800;
+}
+
+
+.teacher-student-info {
+  flex: 1;
+
+  min-width: 0;
+}
+
+
+.teacher-student-name {
+  font-size: 14px;
+
+  font-weight: 700;
+
+  color: #0f172a;
+}
+
+
+.teacher-student-id {
+  margin-top: 2px;
+
+  font-size: 10px;
+
+  color: #64748b;
+}
+
+
+.teacher-status {
+  padding: 6px 9px;
+
+  border-radius: 999px;
+
+  font-size: 10px;
+
+  font-weight: 800;
+
+  white-space: nowrap;
+}
+
+
+.teacher-status.hadir {
+  background: #dcfce7;
+
+  color: #15803d;
+}
+
+
+.teacher-status.terlambat {
+  background: #fef3c7;
+
+  color: #b45309;
+}
+
+
+.teacher-status.izin {
+  background: #dbeafe;
+
+  color: #1d4ed8;
+}
+
+
+.teacher-status.sakit {
+  background: #ede9fe;
+
+  color: #6d28d9;
+}
+
+
+.teacher-status.alpa {
+  background: #fee2e2;
+
+  color: #b91c1c;
+}
+
+
+.teacher-status.kegiatan {
+  background: #cffafe;
+
+  color: #0e7490;
+}
+
+
+.teacher-status.belum {
+  background: #f1f5f9;
+
+  color: #64748b;
+}
+
+
+/* ============================================================
+   TEACHER ACTION
+============================================================ */
+
+.teacher-student-action {
+  border: none;
+
+  background: #eff6ff;
+
+  color: #2563eb;
+
+  border-radius: 8px;
+
+  padding: 7px 10px;
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+
+/* ============================================================
+   MOBILE
+============================================================ */
+
+@media (max-width: 700px) {
+
+  .header-top {
+    align-items: flex-start;
+  }
+
+
+  .login-button {
+    font-size: 10px;
+
+    padding: 8px 9px;
+  }
+
+
+  .schedule-list {
+    grid-template-columns: 1fr;
+  }
+
+
+  .teacher-stats {
+    grid-template-columns:
+      repeat(3, 1fr);
+  }
+
+
+  .dashboard-section {
+    padding: 14px;
+  }
+
+
+  .dashboard-header {
+    padding: 15px;
+  }
+
+
+  .teacher-student {
+    gap: 8px;
+  }
+
+
+  .teacher-student-action {
+    padding: 6px 8px;
+  }
+}
+
+
+@media (max-width: 480px) {
+
+  .school-title {
+    gap: 7px;
+  }
+
+
+  .school-logo {
+    width: 45px;
+    height: 45px;
+  }
+
+
+  .login-button {
+    max-width: 90px;
+  }
+
+
+  .teacher-stats {
+    gap: 5px;
+  }
+
+
+  .teacher-stat {
+    padding: 8px 3px;
+  }
+
+
+  .teacher-stat strong {
+    font-size: 17px;
+  }
+
+
+  .teacher-student-name {
+    font-size: 13px;
+  }
+}
