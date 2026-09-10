@@ -1140,9 +1140,9 @@ function handleSessionExpired() {
    10B. FOOTER APLIKASI
 ============================================================ */
 
-const APP_NAME = 'ABSENSI KARTU PELAJAR';
+const APP_NAME = 'ABSENSI DIGITAL GURU';
 const APP_VERSION = 'V13.0';
-const APP_AUTHOR = 'SMP & SMA Baitul Ulum Boarding School';
+const APP_AUTHOR = 'Rian Rama Putra, S.Kom';
 const APP_YEAR = '2026';
 
 
