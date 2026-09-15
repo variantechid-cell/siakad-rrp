@@ -2,7 +2,7 @@
    ABSENSI KARTU PELAJAR
    SMP & SMA BAITUL ULUM BOARDING SCHOOL
 
-   APP.JS V20.1 - WHATSAPP CENTER STANDALONE
+   APP.JS V20.7 - UNIFIED UI + PRESENSI GURU + DASHBOARD KEPALA SEKOLAH
 
    PERUBAHAN UTAMA:
    - LOGIN menggunakan USERNAME + PASSWORD biasa
@@ -29,7 +29,7 @@
 ============================================================ */
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbyG9NPbVI8JAbh46LecqG3WAOMviBQ7RBG_JNgKTh-N6AQb6aB4lRsZClP5i9oR8d7d/exec';
+  'https://script.google.com/macros/s/AKfycbybMMhzrTv3Uqv3vMAdJTA5Co4FiTh_jZ4ocD5iNdHb2mZBX2S_BJJBrgFCgJIcqb21/exec';
 
 const SESSION_KEY =
   'baitul_ulum_session_token';
@@ -71,6 +71,7 @@ let autoScanTimer = null;
 let teacherAttendanceEditing = false;
 
 let teacherAttendanceSaveAllRunning = false;
+let teacherPresenceState = { checkingIn: false, lastResult: null };
 
 
 /* ============================================================
@@ -689,6 +690,7 @@ async function checkSession() {
 
     clearSession();
 
+    closePrincipalTeacherAttendanceCenter();
     hideDashboard();
 
     return false;
@@ -1123,6 +1125,7 @@ function handleSessionExpired() {
   clearSession();
 
   closeAdminWhatsAppCenter();
+  closePrincipalTeacherAttendanceCenter();
   hideDashboard();
 
 
@@ -1140,9 +1143,9 @@ function handleSessionExpired() {
    10B. FOOTER APLIKASI
 ============================================================ */
 
-const APP_NAME = 'ABSENSI DIGITAL GURU';
+const APP_NAME = 'ABSENSI KARTU PELAJAR';
 const APP_VERSION = 'V13.0';
-const APP_AUTHOR = 'Rian Rama Putra, S.Kom';
+const APP_AUTHOR = 'SMP & SMA Baitul Ulum Boarding School';
 const APP_YEAR = '2026';
 
 
@@ -1174,6 +1177,8 @@ function injectAppFooter() {
 ============================================================ */
 
 function showDashboard() {
+
+  closePrincipalTeacherAttendanceCenter();
 
   const dashboard =
     $('dashboard');
@@ -1223,7 +1228,9 @@ function showDashboard() {
     title.textContent =
       role === 'ADMIN'
         ? 'Dashboard Administrator'
-        : 'Dashboard Guru';
+        : role === 'KEPALA_SEKOLAH'
+          ? 'Dashboard Kepala Sekolah'
+          : 'Dashboard Guru';
   }
 
 
@@ -1235,10 +1242,18 @@ function showDashboard() {
       (
         role === 'ADMIN'
           ? 'ADMINISTRATOR'
-          : 'GURU'
+          : role === 'KEPALA_SEKOLAH'
+            ? 'KEPALA SEKOLAH'
+            : 'GURU'
       );
   }
 
+
+  injectPrincipalTeacherDashboardPanel();
+  injectPrincipalTeacherAttendancePage();
+  setPrincipalTeacherDashboardVisibility(role === 'KEPALA_SEKOLAH');
+  setPrincipalTeacherStandaloneVisibility(false);
+  resetPrincipalTeacherDashboard();
 
   injectAdminRecapPanel();
   setAdminRecapVisibility(role === 'ADMIN');
@@ -1482,6 +1497,142 @@ function renderTeacherSchedules(
 }
 
 
+
+/* ============================================================
+   12B. PRESENSI GURU
+   ============================================================ */
+function ensureTeacherCheckInPanel() {
+  const panel = $('teacherAttendancePanel');
+  if (!panel) return null;
+  let box = $('teacherPresenceCheckInBox');
+  if (box) return box;
+  box = document.createElement('div');
+  box.id = 'teacherPresenceCheckInBox';
+  box.className = 'teacher-presence-checkin-box';
+  box.innerHTML = `
+    <div class="teacher-presence-checkin-head">
+      <div>
+        <div class="teacher-presence-checkin-title">🧑‍🏫 Presensi Kehadiran Guru</div>
+        <div id="teacherPresenceCheckInInfo" class="teacher-presence-checkin-info">Silakan melakukan check-in untuk jadwal ini.</div>
+      </div>
+      <div id="teacherPresenceStatus" class="teacher-presence-status belum">⚪ Belum Check-in</div>
+    </div>
+    <div class="teacher-presence-checkin-actions">
+      <button type="button" id="teacherCheckInButton" class="teacher-checkin-button">🟢 Check-in Kehadiran Guru</button>
+      <span id="teacherCheckInMessage" class="teacher-checkin-message" aria-live="polite"></span>
+    </div>`;
+  panel.insertBefore(box, panel.firstElementChild || null);
+  const button = $('teacherCheckInButton');
+  if (button) button.addEventListener('click', handleTeacherCheckIn);
+  return box;
+}
+
+function setTeacherCheckInMessage(text, type = '') {
+  const el = $('teacherCheckInMessage');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'teacher-checkin-message' + (type ? ' ' + type : '');
+}
+
+function setTeacherPresenceStatus(status, result) {
+  const el = $('teacherPresenceStatus');
+  if (!el) return;
+  const value = String(status || 'BELUM ABSEN').trim().toUpperCase();
+  const map = {
+    HADIR: ['🟢','hadir','HADIR'],
+    TERLAMBAT: ['🟡','terlambat','TERLAMBAT'],
+    IZIN: ['🔵','izin','IZIN'],
+    SAKIT: ['🟣','sakit','SAKIT'],
+    ALPA: ['🔴','alpa','ALPA']
+  };
+  const item = map[value] || ['⚪','belum','Belum Check-in'];
+  el.className = 'teacher-presence-status ' + item[1];
+  el.textContent = item[0] + ' ' + item[2];
+  const info = $('teacherPresenceCheckInInfo');
+  const presence = result && result.presence;
+  if (info && presence) {
+    info.textContent = 'Check-in ' + (presence.jam || presence.waktu || '-') + ' • ' + (presence.status || item[2]);
+  }
+}
+
+function resetTeacherCheckInView() {
+  teacherPresenceState.checkingIn = false;
+  teacherPresenceState.lastResult = null;
+  setTeacherPresenceStatus('BELUM ABSEN');
+  setTeacherCheckInMessage('');
+  const info = $('teacherPresenceCheckInInfo');
+  if (info) info.textContent = 'Silakan melakukan check-in untuk jadwal ini.';
+  const button = $('teacherCheckInButton');
+  if (button) {
+    button.disabled = false;
+    button.textContent = '🟢 Check-in Kehadiran Guru';
+  }
+}
+
+async function handleTeacherCheckIn() {
+  if (!currentToken) {
+    alert('⚠️ Sesi Guru belum tersedia. Silakan login kembali.');
+    return;
+  }
+  if (!currentTeacherSchedule?.jadwalId) {
+    alert('⚠️ Pilih jadwal mengajar terlebih dahulu.');
+    return;
+  }
+  if (teacherPresenceState.checkingIn) return;
+
+  const button = $('teacherCheckInButton');
+  teacherPresenceState.checkingIn = true;
+  if (button) {
+    button.disabled = true;
+    button.textContent = '⏳ Menyimpan presensi...';
+  }
+  setTeacherCheckInMessage('⏳ Mengirim presensi ke server...', 'loading');
+
+  try {
+    const result = await apiGet({
+      action: 'teacherCheckIn',
+      token: currentToken,
+      jadwalId: currentTeacherSchedule.jadwalId
+    });
+
+    console.log('TEACHER CHECK-IN RESPONSE:', result);
+
+    if (result?.status === 'SESSION_EXPIRED') {
+      handleSessionExpired();
+      return;
+    }
+    if (!result || !result.success) {
+      throw new Error(result?.message || 'Presensi Guru gagal disimpan.');
+    }
+
+    teacherPresenceState.lastResult = result;
+    const status = result.statusPresensi || result.presence?.status || result.statusGuru || 'HADIR';
+    setTeacherPresenceStatus(status, result);
+
+    const already = String(result.status || '').toUpperCase() === 'ALREADY';
+    setTeacherCheckInMessage(
+      already
+        ? 'ℹ️ Presensi untuk jadwal ini sudah tercatat di GURU_ABSENSI.'
+        : '✅ Presensi Guru berhasil disimpan ke GURU_ABSENSI.',
+      'success'
+    );
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = '✅ Presensi Tercatat';
+    }
+  } catch (error) {
+    console.error('TEACHER CHECK-IN ERROR:', error);
+    setTeacherCheckInMessage('❌ ' + (error.message || 'Gagal menyimpan presensi Guru.'), 'error');
+    if (button) {
+      button.disabled = false;
+      button.textContent = '🟢 Coba Check-in Lagi';
+    }
+  } finally {
+    teacherPresenceState.checkingIn = false;
+  }
+}
+
 /* ============================================================
    13. PILIH JADWAL
 ============================================================ */
@@ -1527,6 +1678,10 @@ async function selectTeacherSchedule(
     panel.style.display =
       'block';
   }
+
+  ensureTeacherCheckInPanel();
+  resetTeacherCheckInView();
+
 
 
   setText(
@@ -4021,6 +4176,1323 @@ function updateAutoScanLabel() {
 
     label.style.color =
       '#64748b';
+  }
+}
+
+
+
+/* ============================================================
+   41A. DASHBOARD KEPALA SEKOLAH
+   ------------------------------------------------------------
+   Menampilkan persentase kehadiran guru berdasarkan jadwal
+   mengajar aktif pada rentang tanggal yang dipilih.
+
+   Backend:
+   - principalTeacherAttendance
+   - principalTeacherDetail
+
+   Rumus V1:
+   (HADIR + TERLAMBAT) / TOTAL JADWAL AKTIF x 100%
+   BELUM ABSEN belum dihitung sebagai ALPA.
+============================================================ */
+
+let principalTeacherStandaloneVisible = false;
+
+let principalTeacherDashboardState = {
+  loading: false,
+  detailLoading: false,
+  data: null,
+  detailData: null,
+  selectedGuruId: '',
+  tanggalMulai: '',
+  tanggalSelesai: ''
+};
+
+
+function getPrincipalDateRangeDefaults() {
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+
+  return {
+    tanggalMulai: formatDateInputValue(first),
+    tanggalSelesai: formatDateInputValue(last)
+  };
+}
+
+
+function formatDateInputValue(date) {
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+
+  return y + '-' + m + '-' + d;
+}
+
+
+function setPrincipalTeacherDashboardMessage(text, type = '') {
+
+  const el = $('principalTeacherDashboardMessage');
+
+  if (!el) return;
+
+  el.textContent = text || '';
+  el.className =
+    'principal-teacher-dashboard-message' +
+    (type ? ' ' + type : '');
+}
+
+
+function resetPrincipalTeacherDashboard() {
+
+  principalTeacherDashboardState.loading = false;
+  principalTeacherDashboardState.detailLoading = false;
+  principalTeacherDashboardState.data = null;
+  principalTeacherDashboardState.detailData = null;
+  principalTeacherDashboardState.selectedGuruId = '';
+
+  const defaults =
+    getPrincipalDateRangeDefaults();
+
+  principalTeacherDashboardState.tanggalMulai =
+    defaults.tanggalMulai;
+
+  principalTeacherDashboardState.tanggalSelesai =
+    defaults.tanggalSelesai;
+
+  const start =
+    $('principalTanggalMulai');
+
+  const end =
+    $('principalTanggalSelesai');
+
+  if (start) {
+    start.value =
+      defaults.tanggalMulai;
+  }
+
+  if (end) {
+    end.value =
+      defaults.tanggalSelesai;
+  }
+
+  const result =
+    $('principalTeacherDashboardResult');
+
+  const detail =
+    $('principalTeacherDetailResult');
+
+  if (result) {
+    result.style.display =
+      'none';
+
+    result.innerHTML =
+      '';
+  }
+
+  if (detail) {
+    detail.style.display =
+      'none';
+
+    detail.innerHTML =
+      '';
+  }
+
+  setPrincipalTeacherDashboardMessage(
+    '',
+    ''
+  );
+
+  [
+    $('principalLoadTeacherAttendanceButton'),
+    $('principalLoadTeacherAttendanceButtonPage')
+  ].forEach(function(button) {
+
+    if (!button) return;
+
+    button.disabled =
+      false;
+
+    button.textContent =
+      '📊 Tampilkan Presensi Guru';
+
+  });
+}
+
+
+function setPrincipalTeacherDashboardVisibility(visible) {
+
+  const panel = $('principalTeacherDashboardPanel');
+
+  if (!panel) return;
+
+  panel.style.display = visible ? 'block' : 'none';
+
+  if (!visible) {
+    const detail = $('principalTeacherDetailResult');
+
+    if (detail) {
+      detail.style.display = 'none';
+      detail.innerHTML = '';
+    }
+  }
+}
+
+
+function injectPrincipalTeacherDashboardPanel() {
+
+  const dashboard = $('dashboard');
+
+  if (!dashboard) return;
+
+  if ($('principalTeacherDashboardPanel')) return;
+
+  const panel = document.createElement('section');
+
+  panel.id = 'principalTeacherDashboardPanel';
+  panel.className = 'principal-teacher-dashboard-launcher';
+
+  panel.innerHTML = `
+    <div class="principal-launcher-icon">👔</div>
+
+    <div class="principal-launcher-content">
+      <div class="principal-launcher-kicker">
+        MONITORING KEHADIRAN GURU
+      </div>
+
+      <div class="principal-launcher-title">
+        Dashboard Kepala Sekolah
+      </div>
+
+      <div class="principal-launcher-subtitle">
+        Pantau kehadiran guru berdasarkan jadwal mengajar pada periode yang dipilih.
+      </div>
+    </div>
+
+    <button
+      type="button"
+      id="principalLoadTeacherAttendanceButton"
+      class="principal-launcher-button"
+    >
+      📊 Tampilkan Presensi Guru
+    </button>
+  `;
+
+  const userElement = $('dashboardUser');
+
+  if (userElement && userElement.parentNode) {
+    userElement.parentNode.insertBefore(
+      panel,
+      userElement.nextSibling
+    );
+  } else {
+    dashboard.insertBefore(
+      panel,
+      dashboard.firstChild
+    );
+  }
+
+  const button =
+    $('principalLoadTeacherAttendanceButton');
+
+  if (button) {
+    button.addEventListener(
+      'click',
+      openPrincipalTeacherAttendanceCenter
+    );
+  }
+}
+
+
+function setPrincipalTeacherDashboardVisibility(visible) {
+
+  const panel = $('principalTeacherDashboardPanel');
+
+  if (!panel) return;
+
+  panel.style.display = visible ? 'flex' : 'none';
+}
+
+
+function injectPrincipalTeacherAttendancePage() {
+
+  if ($('principalTeacherAttendancePage')) return;
+
+  const page = document.createElement('div');
+
+  page.id = 'principalTeacherAttendancePage';
+  page.className = 'principal-teacher-standalone-page';
+
+  page.innerHTML = `
+    <div class="principal-standalone-shell">
+
+      <header class="principal-standalone-header">
+
+        <div class="principal-standalone-header-left">
+
+          <button
+            type="button"
+            id="principalTeacherBackButton"
+            class="principal-standalone-back-button"
+          >
+            ← Kembali
+          </button>
+
+          <div class="principal-standalone-heading">
+            <div class="principal-standalone-kicker">
+              MONITORING KEHADIRAN GURU
+            </div>
+
+            <div class="principal-standalone-title">
+              👔 Dashboard Kepala Sekolah
+            </div>
+
+            <div class="principal-standalone-subtitle">
+              Monitoring presensi guru berdasarkan jadwal mengajar aktif.
+            </div>
+          </div>
+
+        </div>
+
+        <div class="principal-standalone-school">
+          <div class="principal-standalone-school-name">
+            ABSENSI KARTU PELAJAR
+          </div>
+          <div class="principal-standalone-school-meta">
+            SMP &amp; SMA Baitul Ulum Boarding School
+          </div>
+        </div>
+
+      </header>
+
+      <main class="principal-standalone-content">
+
+        <section class="principal-standalone-filter-card">
+
+          <div class="principal-standalone-section-title">
+            📅 Periode Monitoring
+          </div>
+
+          <div class="principal-standalone-filter-grid">
+
+            <label class="principal-dashboard-field">
+              <span>Tanggal Mulai</span>
+              <input
+                type="date"
+                id="principalTanggalMulai"
+              >
+            </label>
+
+            <label class="principal-dashboard-field">
+              <span>Tanggal Selesai</span>
+              <input
+                type="date"
+                id="principalTanggalSelesai"
+              >
+            </label>
+
+            <button
+              type="button"
+              id="principalLoadTeacherAttendanceButtonPage"
+              class="principal-standalone-primary-button"
+            >
+              📊 Tampilkan Presensi Guru
+            </button>
+
+          </div>
+
+          <div
+            id="principalTeacherDashboardMessage"
+            class="principal-teacher-dashboard-message"
+            aria-live="polite"
+          ></div>
+
+        </section>
+
+        <section
+          id="principalTeacherDashboardResult"
+          class="principal-standalone-result"
+          style="display:none;"
+        ></section>
+
+        <section
+          id="principalTeacherDetailResult"
+          class="principal-standalone-detail"
+          style="display:none;"
+        ></section>
+
+      </main>
+
+      <footer class="principal-standalone-footer">
+        <div class="principal-standalone-footer-name">
+          ABSENSI KARTU PELAJAR
+        </div>
+        <div class="principal-standalone-footer-meta">
+          Dashboard Kepala Sekolah &nbsp;•&nbsp;
+          Versi 20.6 &nbsp;•&nbsp;
+          SMP &amp; SMA Baitul Ulum Boarding School &nbsp;•&nbsp;
+          © 2026
+        </div>
+      </footer>
+
+    </div>
+  `;
+
+  document.body.appendChild(page);
+
+  const defaults =
+    getPrincipalDateRangeDefaults();
+
+  const start =
+    $('principalTanggalMulai');
+
+  const end =
+    $('principalTanggalSelesai');
+
+  if (start) {
+    start.value =
+      defaults.tanggalMulai;
+  }
+
+  if (end) {
+    end.value =
+      defaults.tanggalSelesai;
+  }
+
+  const backButton =
+    $('principalTeacherBackButton');
+
+  if (backButton) {
+    backButton.addEventListener(
+      'click',
+      closePrincipalTeacherAttendanceCenterAndReturn
+    );
+  }
+
+  const loadButton =
+    $('principalLoadTeacherAttendanceButtonPage');
+
+  if (loadButton) {
+    loadButton.addEventListener(
+      'click',
+      loadPrincipalTeacherAttendance
+    );
+  }
+
+  if (start) {
+    start.addEventListener(
+      'change',
+      function() {
+
+        if (
+          end &&
+          end.value &&
+          start.value &&
+          start.value > end.value
+        ) {
+          end.value =
+            start.value;
+        }
+
+      }
+    );
+  }
+
+  if (end) {
+    end.addEventListener(
+      'change',
+      function() {
+
+        if (
+          start &&
+          start.value &&
+          end.value &&
+          end.value < start.value
+        ) {
+          start.value =
+            end.value;
+        }
+
+      }
+    );
+  }
+}
+
+
+function setPrincipalTeacherStandaloneVisibility(visible) {
+
+  const page =
+    $('principalTeacherAttendancePage');
+
+  if (!page) return;
+
+  page.style.display =
+    visible ? 'block' : 'none';
+
+  principalTeacherStandaloneVisible =
+    Boolean(visible);
+
+  document.body.classList.toggle(
+    'principal-teacher-standalone-mode',
+    Boolean(visible)
+  );
+}
+
+
+async function openPrincipalTeacherAttendanceCenter() {
+
+  const role =
+    String(
+      currentUser?.role || ''
+    ).toUpperCase();
+
+  if (
+    !currentToken ||
+    role !== 'KEPALA_SEKOLAH'
+  ) {
+    openLoginModal();
+    return;
+  }
+
+  injectPrincipalTeacherAttendancePage();
+
+  const dashboard =
+    $('dashboard');
+
+  if (dashboard) {
+    dashboard.style.display =
+      'none';
+  }
+
+  const globalFooter =
+    $('appFooter');
+
+  if (globalFooter) {
+    globalFooter.style.display =
+      'none';
+  }
+
+  setPublicScannerAreaVisibility(false);
+
+  injectAppFooter();
+
+  setPrincipalTeacherStandaloneVisibility(true);
+
+  resetPrincipalTeacherDashboard();
+
+  const pageButton =
+    $('principalLoadTeacherAttendanceButtonPage');
+
+  if (pageButton) {
+    pageButton.disabled =
+      false;
+
+    pageButton.textContent =
+      '📊 Tampilkan Presensi Guru';
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+
+  await loadPrincipalTeacherAttendance();
+}
+
+
+function closePrincipalTeacherAttendanceCenter() {
+
+  principalTeacherStandaloneVisible =
+    false;
+
+  setPrincipalTeacherStandaloneVisibility(
+    false
+  );
+
+  const detail =
+    $('principalTeacherDetailResult');
+
+  if (detail) {
+    detail.style.display =
+      'none';
+
+    detail.innerHTML =
+      '';
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+}
+
+
+function closePrincipalTeacherAttendanceCenterAndReturn() {
+
+  closePrincipalTeacherAttendanceCenter();
+
+  if (
+    currentToken &&
+    String(
+      currentUser?.role || ''
+    ).toUpperCase() ===
+      'KEPALA_SEKOLAH'
+  ) {
+
+    const dashboard =
+      $('dashboard');
+
+    if (dashboard) {
+      dashboard.style.display =
+        'block';
+    }
+
+    const globalFooter =
+      $('appFooter');
+
+    if (globalFooter) {
+      globalFooter.style.display =
+        '';
+    }
+
+    setPublicScannerAreaVisibility(
+      false
+    );
+
+    setPrincipalTeacherDashboardVisibility(
+      true
+    );
+
+    markPrincipalTodaySchedulePanels();
+
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }
+}
+
+
+function renderPrincipalSummaryCards(summary) {
+
+  summary = summary || {};
+
+  const totalJadwal =
+    Number(summary.totalJadwal || 0);
+
+  const totalHadir =
+    Number(summary.totalHadir || 0);
+
+  const totalTerlambat =
+    Number(summary.totalTerlambat || 0);
+
+  const totalIzin =
+    Number(summary.totalIzin || 0);
+
+  const totalSakit =
+    Number(summary.totalSakit || 0);
+
+  const totalAlpa =
+    Number(summary.totalAlpa || 0);
+
+  const totalMasuk =
+    totalHadir +
+    totalTerlambat;
+
+  const percentage =
+    totalJadwal > 0
+      ? ((totalMasuk / totalJadwal) * 100).toFixed(2)
+      : '0.00';
+
+  return `
+    <div class="principal-summary-grid">
+
+      <div class="principal-summary-card">
+        <div class="principal-summary-icon">📚</div>
+        <div class="principal-summary-label">Total Jadwal</div>
+        <div class="principal-summary-value">${totalJadwal}</div>
+        <div class="principal-summary-note">jadwal guru aktif</div>
+      </div>
+
+      <div class="principal-summary-card hadir">
+        <div class="principal-summary-icon">🟢</div>
+        <div class="principal-summary-label">Hadir</div>
+        <div class="principal-summary-value">${totalHadir}</div>
+        <div class="principal-summary-note">check-in tepat waktu</div>
+      </div>
+
+      <div class="principal-summary-card terlambat">
+        <div class="principal-summary-icon">🟡</div>
+        <div class="principal-summary-label">Terlambat</div>
+        <div class="principal-summary-value">${totalTerlambat}</div>
+        <div class="principal-summary-note">tetap dihitung hadir</div>
+      </div>
+
+      <div class="principal-summary-card izin">
+        <div class="principal-summary-icon">🔵</div>
+        <div class="principal-summary-label">Izin</div>
+        <div class="principal-summary-value">${totalIzin}</div>
+        <div class="principal-summary-note">status pada presensi</div>
+      </div>
+
+      <div class="principal-summary-card sakit">
+        <div class="principal-summary-icon">🟣</div>
+        <div class="principal-summary-label">Sakit</div>
+        <div class="principal-summary-value">${totalSakit}</div>
+        <div class="principal-summary-note">status pada presensi</div>
+      </div>
+
+      <div class="principal-summary-card alpa">
+        <div class="principal-summary-icon">🔴</div>
+        <div class="principal-summary-label">Alpa</div>
+        <div class="principal-summary-value">${totalAlpa}</div>
+        <div class="principal-summary-note">status pada presensi</div>
+      </div>
+
+      <div class="principal-summary-card percentage">
+        <div class="principal-summary-icon">📈</div>
+        <div class="principal-summary-label">Kehadiran Efektif</div>
+        <div class="principal-summary-value">${percentage}%</div>
+        <div class="principal-summary-note">Hadir + Terlambat / Total Jadwal</div>
+      </div>
+
+    </div>
+  `;
+}
+
+
+function renderPrincipalTeacherTable(teachers) {
+
+  teachers = Array.isArray(teachers)
+    ? teachers
+    : [];
+
+  if (!teachers.length) {
+    return `
+      <div class="principal-empty-state">
+        <div class="principal-empty-icon">📭</div>
+        <div class="principal-empty-title">Belum ada data jadwal guru</div>
+        <div class="principal-empty-text">
+          Tidak ditemukan jadwal aktif pada periode yang dipilih.
+        </div>
+      </div>
+    `;
+  }
+
+  const rows = teachers.map(function(item, index) {
+
+    const guruId =
+      String(item.guruId || '');
+
+    const guru =
+      String(item.guru || 'Guru');
+
+    const jadwal =
+      Number(item.jadwal || 0);
+
+    const hadir =
+      Number(item.hadir || 0);
+
+    const terlambat =
+      Number(item.terlambat || 0);
+
+    const izin =
+      Number(item.izin || 0);
+
+    const sakit =
+      Number(item.sakit || 0);
+
+    const alpa =
+      Number(item.alpa || 0);
+
+    const belumAbsen =
+      Number(item.belumAbsen || 0);
+
+    const persentase =
+      Number(item.persentase || 0);
+
+    const percentageClass =
+      persentase >= 90
+        ? 'good'
+        : persentase >= 75
+          ? 'warning'
+          : 'danger';
+
+    return `
+      <tr>
+        <td class="principal-rank">${index + 1}</td>
+        <td>
+          <div class="principal-guru-name">${escapeHTML(guru)}</div>
+          <div class="principal-guru-id">${escapeHTML(guruId)}</div>
+        </td>
+        <td class="num">${jadwal}</td>
+        <td class="num">${hadir}</td>
+        <td class="num">${terlambat}</td>
+        <td class="num">${izin}</td>
+        <td class="num">${sakit}</td>
+        <td class="num">${alpa}</td>
+        <td class="num">${belumAbsen}</td>
+        <td>
+          <span class="principal-percentage ${percentageClass}">
+            ${persentase.toFixed(2)}%
+          </span>
+        </td>
+        <td>
+          <button
+            type="button"
+            class="principal-detail-button"
+            data-guru-id="${escapeHTML(guruId)}"
+            data-guru-name="${escapeHTML(guru)}"
+          >
+            🔎 Detail
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="principal-table-wrap">
+      <table class="principal-teacher-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Guru</th>
+            <th>Jadwal</th>
+            <th>Hadir</th>
+            <th>Terlambat</th>
+            <th>Izin</th>
+            <th>Sakit</th>
+            <th>Alpa</th>
+            <th>Belum Absen</th>
+            <th>Persentase</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+
+function bindPrincipalTeacherDetailButtons() {
+
+  const buttons =
+    document.querySelectorAll(
+      '.principal-detail-button'
+    );
+
+  buttons.forEach(function(button) {
+
+    button.addEventListener(
+      'click',
+      function() {
+
+        const guruId =
+          button.getAttribute('data-guru-id') || '';
+
+        const guruName =
+          button.getAttribute('data-guru-name') || 'Guru';
+
+        loadPrincipalTeacherDetail(
+          guruId,
+          guruName
+        );
+      }
+    );
+  });
+}
+
+
+async function loadPrincipalTeacherAttendance() {
+
+  const role =
+    String(currentUser?.role || '').toUpperCase();
+
+  if (
+    !currentToken ||
+    role !== 'KEPALA_SEKOLAH'
+  ) {
+    setPrincipalTeacherDashboardMessage(
+      '⛔ Dashboard ini hanya dapat diakses Kepala Sekolah.',
+      'error'
+    );
+    return;
+  }
+
+  const start =
+    $('principalTanggalMulai');
+
+  const end =
+    $('principalTanggalSelesai');
+
+  const tanggalMulai =
+    start
+      ? String(start.value || '').trim()
+      : '';
+
+  const tanggalSelesai =
+    end
+      ? String(end.value || '').trim()
+      : '';
+
+  if (!tanggalMulai || !tanggalSelesai) {
+    setPrincipalTeacherDashboardMessage(
+      '⚠️ Tanggal mulai dan tanggal selesai wajib diisi.',
+      'error'
+    );
+    return;
+  }
+
+  if (tanggalMulai > tanggalSelesai) {
+    setPrincipalTeacherDashboardMessage(
+      '⚠️ Tanggal mulai tidak boleh lebih besar dari tanggal selesai.',
+      'error'
+    );
+    return;
+  }
+
+  const button =
+    $('principalLoadTeacherAttendanceButtonPage') ||
+    $('principalLoadTeacherAttendanceButton');
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = '⏳ Memuat data...';
+  }
+
+  principalTeacherDashboardState.loading = true;
+  principalTeacherDashboardState.tanggalMulai =
+    tanggalMulai;
+  principalTeacherDashboardState.tanggalSelesai =
+    tanggalSelesai;
+  principalTeacherDashboardState.selectedGuruId = '';
+  principalTeacherDashboardState.detailData = null;
+
+  const detail =
+    $('principalTeacherDetailResult');
+
+  if (detail) {
+    detail.style.display = 'none';
+    detail.innerHTML = '';
+  }
+
+  setPrincipalTeacherDashboardMessage(
+    '⏳ Mengambil jadwal dan presensi guru...',
+    'loading'
+  );
+
+  try {
+
+    const result =
+      await apiGet(
+        {
+          action: 'principalTeacherAttendance',
+          token: currentToken,
+          tanggalMulai: tanggalMulai,
+          tanggalSelesai: tanggalSelesai,
+          guruId: ''
+        },
+        { timeoutMs: 120000 }
+      );
+
+    if (
+      result?.status ===
+      'SESSION_EXPIRED'
+    ) {
+      handleSessionExpired();
+      return;
+    }
+
+    if (
+      !result ||
+      !result.success
+    ) {
+      throw new Error(
+        result?.message ||
+        'Data presensi guru gagal dimuat.'
+      );
+    }
+
+    const data =
+      result.data || {};
+
+    principalTeacherDashboardState.data =
+      data;
+
+    const resultContainer =
+      $('principalTeacherDashboardResult');
+
+    if (resultContainer) {
+
+      resultContainer.innerHTML = `
+        ${renderPrincipalSummaryCards(data.summary)}
+        <div class="principal-result-heading">
+          <div>
+            <div class="principal-result-title">
+              Rekap Kehadiran Guru
+            </div>
+            <div class="principal-result-subtitle">
+              ${escapeHTML(result.tanggalMulai || tanggalMulai)}
+              s/d
+              ${escapeHTML(result.tanggalSelesai || tanggalSelesai)}
+            </div>
+          </div>
+          <div class="principal-result-badge">
+            ${Array.isArray(data.teachers) ? data.teachers.length : 0} Guru
+          </div>
+        </div>
+        ${renderPrincipalTeacherTable(data.teachers)}
+      `;
+
+      resultContainer.style.display = 'block';
+
+      bindPrincipalTeacherDetailButtons();
+    }
+
+    setPrincipalTeacherDashboardMessage(
+      '✅ Data presensi guru berhasil dimuat.',
+      'success'
+    );
+
+  } catch (error) {
+
+    console.error(
+      'PRINCIPAL TEACHER ATTENDANCE ERROR:',
+      error
+    );
+
+    const resultContainer =
+      $('principalTeacherDashboardResult');
+
+    if (resultContainer) {
+      resultContainer.style.display = 'none';
+      resultContainer.innerHTML = '';
+    }
+
+    setPrincipalTeacherDashboardMessage(
+      '❌ ' +
+      (
+        error?.message ||
+        'Gagal mengambil data presensi guru.'
+      ),
+      'error'
+    );
+
+  } finally {
+
+    principalTeacherDashboardState.loading = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        '📊 Tampilkan Presensi Guru';
+    }
+  }
+}
+
+
+function renderPrincipalDetailSummary(summary) {
+
+  summary = summary || {};
+
+  return `
+    <div class="principal-detail-summary-grid">
+      <div class="principal-detail-stat">
+        <span>Total Jadwal</span>
+        <strong>${Number(summary.totalJadwal || 0)}</strong>
+      </div>
+      <div class="principal-detail-stat hadir">
+        <span>Hadir</span>
+        <strong>${Number(summary.hadir || 0)}</strong>
+      </div>
+      <div class="principal-detail-stat terlambat">
+        <span>Terlambat</span>
+        <strong>${Number(summary.terlambat || 0)}</strong>
+      </div>
+      <div class="principal-detail-stat izin">
+        <span>Izin</span>
+        <strong>${Number(summary.izin || 0)}</strong>
+      </div>
+      <div class="principal-detail-stat sakit">
+        <span>Sakit</span>
+        <strong>${Number(summary.sakit || 0)}</strong>
+      </div>
+      <div class="principal-detail-stat alpa">
+        <span>Alpa</span>
+        <strong>${Number(summary.alpa || 0)}</strong>
+      </div>
+      <div class="principal-detail-stat belum">
+        <span>Belum Absen</span>
+        <strong>${Number(summary.belumAbsen || 0)}</strong>
+      </div>
+    </div>
+  `;
+}
+
+
+function renderPrincipalDetailTable(jadwal) {
+
+  jadwal = Array.isArray(jadwal)
+    ? jadwal
+    : [];
+
+  if (!jadwal.length) {
+    return `
+      <div class="principal-empty-state">
+        <div class="principal-empty-icon">📭</div>
+        <div class="principal-empty-title">Tidak ada detail jadwal</div>
+        <div class="principal-empty-text">
+          Tidak ditemukan jadwal pada periode yang dipilih.
+        </div>
+      </div>
+    `;
+  }
+
+  const rows = jadwal.map(function(item) {
+
+    const status =
+      String(item.status || 'BELUM ABSEN')
+        .toUpperCase();
+
+    let statusClass = 'belum';
+    let statusText = 'BELUM ABSEN';
+
+    if (status === 'HADIR') {
+      statusClass = 'hadir';
+      statusText = 'HADIR';
+    } else if (status === 'TERLAMBAT') {
+      statusClass = 'terlambat';
+      statusText = 'TERLAMBAT';
+    } else if (status === 'IZIN') {
+      statusClass = 'izin';
+      statusText = 'IZIN';
+    } else if (status === 'SAKIT') {
+      statusClass = 'sakit';
+      statusText = 'SAKIT';
+    } else if (status === 'ALPA') {
+      statusClass = 'alpa';
+      statusText = 'ALPA';
+    }
+
+    return `
+      <tr>
+        <td>${escapeHTML(item.tanggal || '')}</td>
+        <td>${escapeHTML(item.hari || '')}</td>
+        <td>${escapeHTML(item.jamKe || '')}</td>
+        <td>
+          ${escapeHTML(item.jamMulai || '')}
+          -
+          ${escapeHTML(item.jamSelesai || '')}
+        </td>
+        <td>${escapeHTML(item.kelas || '')}</td>
+        <td>${escapeHTML(item.mapel || '')}</td>
+        <td>
+          <span class="principal-detail-status ${statusClass}">
+            ${statusText}
+          </span>
+        </td>
+        <td>${escapeHTML(item.jamCheckIn || '-')}</td>
+        <td>${escapeHTML(item.metode || '-')}</td>
+        <td>${escapeHTML(item.catatan || '-')}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="principal-detail-table-wrap">
+      <table class="principal-detail-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Hari</th>
+            <th>Jam Ke</th>
+            <th>Waktu</th>
+            <th>Kelas</th>
+            <th>Mapel</th>
+            <th>Status</th>
+            <th>Check-in</th>
+            <th>Metode</th>
+            <th>Catatan</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+
+async function loadPrincipalTeacherDetail(
+  guruId,
+  guruName
+) {
+
+  const role =
+    String(currentUser?.role || '').toUpperCase();
+
+  if (
+    !currentToken ||
+    role !== 'KEPALA_SEKOLAH'
+  ) {
+    return;
+  }
+
+  guruId =
+    String(guruId || '').trim();
+
+  guruName =
+    String(guruName || 'Guru').trim();
+
+  if (!guruId) {
+    setPrincipalTeacherDashboardMessage(
+      '⚠️ GURU_ID tidak ditemukan.',
+      'error'
+    );
+    return;
+  }
+
+  const detail =
+    $('principalTeacherDetailResult');
+
+  if (!detail) return;
+
+  principalTeacherDashboardState.detailLoading = true;
+  principalTeacherDashboardState.selectedGuruId =
+    guruId;
+
+  detail.style.display = 'block';
+
+  detail.innerHTML = `
+    <div class="principal-detail-loading">
+      ⏳ Memuat detail presensi ${escapeHTML(guruName)}...
+    </div>
+  `;
+
+  detail.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+
+  try {
+
+    const result =
+      await apiGet(
+        {
+          action: 'principalTeacherDetail',
+          token: currentToken,
+          guruId: guruId,
+          tanggalMulai:
+            principalTeacherDashboardState.tanggalMulai,
+          tanggalSelesai:
+            principalTeacherDashboardState.tanggalSelesai
+        },
+        { timeoutMs: 120000 }
+      );
+
+    if (
+      result?.status ===
+      'SESSION_EXPIRED'
+    ) {
+      handleSessionExpired();
+      return;
+    }
+
+    if (
+      !result ||
+      !result.success
+    ) {
+      throw new Error(
+        result?.message ||
+        'Detail presensi guru gagal dimuat.'
+      );
+    }
+
+    const data =
+      result.data || {};
+
+    principalTeacherDashboardState.detailData =
+      data;
+
+    detail.innerHTML = `
+      <div class="principal-detail-header">
+        <div>
+          <div class="principal-detail-kicker">DETAIL GURU</div>
+          <div class="principal-detail-title">
+            👤 ${escapeHTML(guruName)}
+          </div>
+          <div class="principal-detail-subtitle">
+            ${escapeHTML(guruId)}
+            •
+            ${escapeHTML(result.tanggalMulai || principalTeacherDashboardState.tanggalMulai)}
+            s/d
+            ${escapeHTML(result.tanggalSelesai || principalTeacherDashboardState.tanggalSelesai)}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          id="principalCloseTeacherDetailButton"
+          class="principal-close-detail-button"
+        >
+          ✕ Tutup Detail
+        </button>
+      </div>
+
+      ${renderPrincipalDetailSummary(data.summary)}
+
+      ${renderPrincipalDetailTable(data.jadwal)}
+    `;
+
+    const closeButton =
+      $('principalCloseTeacherDetailButton');
+
+    if (closeButton) {
+      closeButton.addEventListener(
+        'click',
+        function() {
+          detail.style.display = 'none';
+          detail.innerHTML = '';
+        }
+      );
+    }
+
+    setPrincipalTeacherDashboardMessage(
+      '✅ Detail presensi ' +
+      guruName +
+      ' berhasil dimuat.',
+      'success'
+    );
+
+  } catch (error) {
+
+    console.error(
+      'PRINCIPAL TEACHER DETAIL ERROR:',
+      error
+    );
+
+    detail.innerHTML = `
+      <div class="principal-detail-error">
+        ❌ ${escapeHTML(
+          error?.message ||
+          'Gagal memuat detail presensi guru.'
+        )}
+      </div>
+    `;
+
+  } finally {
+
+    principalTeacherDashboardState.detailLoading = false;
   }
 }
 
@@ -6723,6 +8195,580 @@ function injectDashboardStyles() {
       transition: width .35s ease;
     }
 
+
+
+    /* ==========================================================
+       DASHBOARD KEPALA SEKOLAH
+    ========================================================== */
+    .principal-teacher-dashboard-panel {
+      margin: 14px 0;
+      padding: 18px;
+      border: 1px solid #dbeafe;
+      border-radius: 18px;
+      background: linear-gradient(145deg,#ffffff,#f8fbff);
+      box-shadow: 0 7px 22px rgba(15,23,42,.06);
+    }
+
+    .principal-dashboard-header {
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+    }
+
+    .principal-dashboard-kicker {
+      font-size:10px;
+      font-weight:900;
+      letter-spacing:.12em;
+      color:#2563eb;
+    }
+
+    .principal-dashboard-title {
+      margin-top:3px;
+      font-size:20px;
+      font-weight:900;
+      color:#0f172a;
+    }
+
+    .principal-dashboard-subtitle {
+      margin-top:5px;
+      max-width:900px;
+      font-size:12px;
+      line-height:1.55;
+      color:#64748b;
+    }
+
+    .principal-dashboard-controls {
+      display:grid;
+      grid-template-columns:1fr 1fr auto;
+      gap:10px;
+      align-items:end;
+      margin-top:15px;
+    }
+
+    .principal-dashboard-field span {
+      display:block;
+      margin-bottom:5px;
+      font-size:12px;
+      font-weight:800;
+      color:#475569;
+    }
+
+    .principal-dashboard-field input {
+      width:100%;
+      box-sizing:border-box;
+      padding:10px 11px;
+      border:1px solid #cbd5e1;
+      border-radius:10px;
+      background:#fff;
+      color:#0f172a;
+      font:inherit;
+    }
+
+    .principal-dashboard-button {
+      border:0;
+      border-radius:10px;
+      padding:11px 15px;
+      background:#2563eb;
+      color:#fff;
+      font-weight:800;
+      cursor:pointer;
+      white-space:nowrap;
+      font:inherit;
+      box-shadow:0 5px 12px rgba(37,99,235,.18);
+    }
+
+    .principal-dashboard-button:hover {
+      filter:brightness(1.05);
+    }
+
+    .principal-dashboard-button:disabled {
+      opacity:.65;
+      cursor:wait;
+    }
+
+    .principal-teacher-dashboard-message {
+      min-height:20px;
+      margin-top:10px;
+      font-size:13px;
+      line-height:1.5;
+    }
+
+    .principal-teacher-dashboard-message.loading {
+      color:#92400e;
+    }
+
+    .principal-teacher-dashboard-message.success {
+      color:#166534;
+    }
+
+    .principal-teacher-dashboard-message.error {
+      color:#b91c1c;
+    }
+
+    .principal-summary-grid {
+      display:grid;
+      grid-template-columns:repeat(7,minmax(0,1fr));
+      gap:9px;
+      margin-top:14px;
+    }
+
+    .principal-summary-card {
+      min-width:0;
+      padding:12px;
+      border:1px solid #e2e8f0;
+      border-radius:14px;
+      background:#fff;
+    }
+
+    .principal-summary-card.hadir {
+      background:#f0fdf4;
+      border-color:#bbf7d0;
+    }
+
+    .principal-summary-card.terlambat {
+      background:#fffbeb;
+      border-color:#fde68a;
+    }
+
+    .principal-summary-card.izin {
+      background:#eff6ff;
+      border-color:#bfdbfe;
+    }
+
+    .principal-summary-card.sakit {
+      background:#f5f3ff;
+      border-color:#ddd6fe;
+    }
+
+    .principal-summary-card.alpa {
+      background:#fef2f2;
+      border-color:#fecaca;
+    }
+
+    .principal-summary-card.percentage {
+      background:#f0fdfa;
+      border-color:#99f6e4;
+    }
+
+    .principal-summary-icon {
+      font-size:18px;
+    }
+
+    .principal-summary-label {
+      margin-top:4px;
+      font-size:11px;
+      font-weight:800;
+      color:#64748b;
+    }
+
+    .principal-summary-value {
+      margin-top:2px;
+      font-size:20px;
+      font-weight:900;
+      color:#0f172a;
+    }
+
+    .principal-summary-note {
+      margin-top:2px;
+      font-size:9px;
+      line-height:1.35;
+      color:#94a3b8;
+    }
+
+    .principal-result-heading {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin:18px 0 10px;
+    }
+
+    .principal-result-title {
+      font-size:16px;
+      font-weight:900;
+      color:#0f172a;
+    }
+
+    .principal-result-subtitle {
+      margin-top:3px;
+      font-size:11px;
+      color:#64748b;
+    }
+
+    .principal-result-badge {
+      padding:7px 10px;
+      border-radius:999px;
+      background:#eff6ff;
+      color:#1d4ed8;
+      font-size:11px;
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    .principal-table-wrap,
+    .principal-detail-table-wrap {
+      width:100%;
+      overflow:auto;
+      border:1px solid #e2e8f0;
+      border-radius:12px;
+      background:#fff;
+    }
+
+    .principal-teacher-table,
+    .principal-detail-table {
+      width:100%;
+      border-collapse:collapse;
+      min-width:1080px;
+    }
+
+    .principal-teacher-table th,
+    .principal-teacher-table td,
+    .principal-detail-table th,
+    .principal-detail-table td {
+      padding:9px 8px;
+      border-bottom:1px solid #eef2f7;
+      text-align:left;
+      font-size:11px;
+      vertical-align:middle;
+    }
+
+    .principal-teacher-table th,
+    .principal-detail-table th {
+      background:#f8fafc;
+      color:#475569;
+      font-size:10px;
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    .principal-teacher-table tbody tr:hover,
+    .principal-detail-table tbody tr:hover {
+      background:#f8fbff;
+    }
+
+    .principal-teacher-table .num {
+      text-align:center;
+      font-variant-numeric:tabular-nums;
+    }
+
+    .principal-rank {
+      width:28px;
+      text-align:center !important;
+      font-weight:900;
+      color:#64748b;
+    }
+
+    .principal-guru-name {
+      font-weight:800;
+      color:#0f172a;
+    }
+
+    .principal-guru-id {
+      margin-top:2px;
+      font-size:9px;
+      color:#94a3b8;
+    }
+
+    .principal-percentage {
+      display:inline-block;
+      min-width:58px;
+      padding:5px 7px;
+      border-radius:999px;
+      text-align:center;
+      font-weight:900;
+      font-size:10px;
+    }
+
+    .principal-percentage.good {
+      background:#dcfce7;
+      color:#166534;
+    }
+
+    .principal-percentage.warning {
+      background:#fef3c7;
+      color:#92400e;
+    }
+
+    .principal-percentage.danger {
+      background:#fee2e2;
+      color:#b91c1c;
+    }
+
+    .principal-detail-button {
+      border:1px solid #bfdbfe;
+      border-radius:8px;
+      padding:7px 9px;
+      background:#eff6ff;
+      color:#1d4ed8;
+      font-weight:800;
+      cursor:pointer;
+      font:inherit;
+      white-space:nowrap;
+    }
+
+    .principal-detail-button:hover {
+      background:#dbeafe;
+    }
+
+    .principal-teacher-detail-result {
+      margin-top:15px;
+      padding-top:15px;
+      border-top:1px dashed #cbd5e1;
+    }
+
+    .principal-detail-header {
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+      margin-bottom:12px;
+    }
+
+    .principal-detail-kicker {
+      font-size:10px;
+      font-weight:900;
+      letter-spacing:.1em;
+      color:#64748b;
+    }
+
+    .principal-detail-title {
+      margin-top:2px;
+      font-size:17px;
+      font-weight:900;
+      color:#0f172a;
+    }
+
+    .principal-detail-subtitle {
+      margin-top:4px;
+      font-size:11px;
+      color:#64748b;
+    }
+
+    .principal-close-detail-button {
+      border:1px solid #cbd5e1;
+      border-radius:9px;
+      padding:8px 10px;
+      background:#fff;
+      color:#475569;
+      font-weight:800;
+      cursor:pointer;
+      font:inherit;
+      white-space:nowrap;
+    }
+
+    .principal-detail-summary-grid {
+      display:grid;
+      grid-template-columns:repeat(7,minmax(0,1fr));
+      gap:8px;
+      margin-bottom:12px;
+    }
+
+    .principal-detail-stat {
+      padding:10px;
+      border:1px solid #e2e8f0;
+      border-radius:10px;
+      background:#fff;
+    }
+
+    .principal-detail-stat span {
+      display:block;
+      font-size:10px;
+      color:#64748b;
+      font-weight:800;
+    }
+
+    .principal-detail-stat strong {
+      display:block;
+      margin-top:3px;
+      font-size:17px;
+      color:#0f172a;
+    }
+
+    .principal-detail-stat.hadir {
+      background:#f0fdf4;
+      border-color:#bbf7d0;
+    }
+
+    .principal-detail-stat.terlambat {
+      background:#fffbeb;
+      border-color:#fde68a;
+    }
+
+    .principal-detail-stat.izin {
+      background:#eff6ff;
+      border-color:#bfdbfe;
+    }
+
+    .principal-detail-stat.sakit {
+      background:#f5f3ff;
+      border-color:#ddd6fe;
+    }
+
+    .principal-detail-stat.alpa {
+      background:#fef2f2;
+      border-color:#fecaca;
+    }
+
+    .principal-detail-stat.belum {
+      background:#f8fafc;
+      border-color:#cbd5e1;
+    }
+
+    .principal-detail-status {
+      display:inline-block;
+      padding:5px 7px;
+      border-radius:999px;
+      font-size:9px;
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    .principal-detail-status.hadir {
+      background:#dcfce7;
+      color:#166534;
+    }
+
+    .principal-detail-status.terlambat {
+      background:#fef3c7;
+      color:#92400e;
+    }
+
+    .principal-detail-status.izin {
+      background:#dbeafe;
+      color:#1d4ed8;
+    }
+
+    .principal-detail-status.sakit {
+      background:#ede9fe;
+      color:#6d28d9;
+    }
+
+    .principal-detail-status.alpa {
+      background:#fee2e2;
+      color:#b91c1c;
+    }
+
+    .principal-detail-status.belum {
+      background:#f1f5f9;
+      color:#64748b;
+    }
+
+    .principal-empty-state {
+      padding:28px 16px;
+      text-align:center;
+      border:1px dashed #cbd5e1;
+      border-radius:12px;
+      background:#f8fafc;
+    }
+
+    .principal-empty-icon {
+      font-size:28px;
+    }
+
+    .principal-empty-title {
+      margin-top:5px;
+      font-weight:900;
+      color:#0f172a;
+    }
+
+    .principal-empty-text {
+      margin-top:3px;
+      font-size:12px;
+      color:#64748b;
+    }
+
+    .principal-detail-loading,
+    .principal-detail-error {
+      padding:14px;
+      border-radius:10px;
+      background:#f8fafc;
+      color:#475569;
+      font-size:13px;
+    }
+
+    .principal-detail-error {
+      background:#fef2f2;
+      color:#b91c1c;
+    }
+
+    @media (max-width: 900px) {
+      .principal-summary-grid {
+        grid-template-columns:repeat(3,minmax(0,1fr));
+      }
+
+      .principal-detail-summary-grid {
+        grid-template-columns:repeat(3,minmax(0,1fr));
+      }
+
+      .principal-dashboard-controls {
+        grid-template-columns:1fr 1fr;
+      }
+
+      .principal-dashboard-button {
+        grid-column:1 / -1;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .principal-teacher-dashboard-panel {
+        padding:13px;
+        border-radius:14px;
+      }
+
+      .principal-dashboard-controls {
+        grid-template-columns:1fr;
+      }
+
+      .principal-dashboard-button {
+        grid-column:auto;
+        width:100%;
+      }
+
+      .principal-summary-grid,
+      .principal-detail-summary-grid {
+        grid-template-columns:repeat(2,minmax(0,1fr));
+      }
+
+      .principal-detail-header {
+        flex-direction:column;
+      }
+
+      .principal-close-detail-button {
+        width:100%;
+      }
+    }
+
+
+    .teacher-presence-checkin-box {
+      margin: 0 0 14px; padding: 14px; border: 1px solid #dbeafe;
+      border-radius: 14px; background: linear-gradient(135deg,#eff6ff,#f8fafc);
+    }
+    .teacher-presence-checkin-head {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .teacher-presence-checkin-title { font-size:15px; font-weight:800; color:#0f172a; }
+    .teacher-presence-checkin-info { margin-top:4px; color:#64748b; font-size:12px; line-height:1.5; }
+    .teacher-presence-status {
+      padding:7px 10px; border-radius:999px; font-size:11px; font-weight:800;
+      white-space:nowrap; background:#f1f5f9; color:#475569;
+    }
+    .teacher-presence-status.hadir { background:#dcfce7; color:#166534; }
+    .teacher-presence-status.terlambat { background:#fef3c7; color:#92400e; }
+    .teacher-presence-status.izin { background:#dbeafe; color:#1d4ed8; }
+    .teacher-presence-status.sakit { background:#ede9fe; color:#6d28d9; }
+    .teacher-presence-status.alpa { background:#fee2e2; color:#b91c1c; }
+    .teacher-presence-checkin-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    .teacher-checkin-button {
+      border:0; border-radius:10px; padding:11px 15px; background:#16a34a;
+      color:#fff; font-weight:800; cursor:pointer;
+    }
+    .teacher-checkin-button:disabled { opacity:.65; cursor:wait; }
+    .teacher-checkin-message { min-height:20px; font-size:12px; line-height:1.5; }
+    .teacher-checkin-message.loading { color:#92400e; }
+    .teacher-checkin-message.success { color:#166534; }
+    .teacher-checkin-message.error { color:#b91c1c; }
+
     .app-footer {
       width: 100%;
       box-sizing: border-box;
@@ -6781,6 +8827,9 @@ function injectDashboardStyles() {
       .admin-recap-download-wrap {
         align-items: stretch;
       }
+
+      .teacher-presence-checkin-head { align-items:flex-start; flex-direction:column; }
+      .teacher-checkin-button { width:100%; }
 
       .teacher-schedule-card {
         padding: 11px;
@@ -7124,6 +9173,393 @@ function startAutoRefresh() {
 }
 
 
+
+/* ============================================================
+   V20.7 - DASHBOARD KEPALA SEKOLAH STANDALONE PAGE
+   ============================================================ */
+function injectPrincipalStandaloneStyles() {
+
+  if (
+    document.getElementById(
+      'principal-standalone-v206'
+    )
+  ) {
+    return;
+  }
+
+  const style =
+    document.createElement('style');
+
+  style.id =
+    'principal-standalone-v206';
+
+  style.textContent = `
+    /* Launcher kecil di Dashboard */
+    .principal-teacher-dashboard-launcher {
+      width: 100%;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin: 18px 0;
+      padding: 20px 22px;
+      border: 1px solid #dbe4ef;
+      border-radius: 16px;
+      background: #ffffff;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+    }
+
+    .principal-launcher-icon {
+      width: 52px;
+      height: 52px;
+      flex: 0 0 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: #eff6ff;
+      font-size: 27px;
+    }
+
+    .principal-launcher-content {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .principal-launcher-kicker {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      color: #2563eb;
+      margin-bottom: 4px;
+    }
+
+    .principal-launcher-title {
+      font-size: 21px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+
+    .principal-launcher-subtitle {
+      margin-top: 5px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .principal-launcher-button,
+    .principal-standalone-primary-button {
+      border: 0;
+      border-radius: 11px;
+      background: #2563eb;
+      color: #ffffff;
+      padding: 12px 17px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 7px 16px rgba(37, 99, 235, .22);
+      white-space: nowrap;
+    }
+
+    .principal-launcher-button:hover,
+    .principal-standalone-primary-button:hover {
+      background: #1d4ed8;
+    }
+
+    /* Halaman standalone */
+    .principal-teacher-standalone-page {
+      display: none;
+      position: relative;
+      min-height: 100vh;
+      box-sizing: border-box;
+      background: #f4f7fb;
+      color: #0f172a;
+      z-index: 9998;
+    }
+
+    .principal-standalone-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .principal-standalone-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 28px;
+      background: #ffffff;
+      border-bottom: 1px solid #dbe4ef;
+      box-shadow: 0 4px 18px rgba(15, 23, 42, .06);
+    }
+
+    .principal-standalone-header-left {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      min-width: 0;
+    }
+
+    .principal-standalone-back-button {
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .principal-standalone-back-button:hover {
+      background: #f8fafc;
+    }
+
+    .principal-standalone-heading {
+      min-width: 0;
+    }
+
+    .principal-standalone-kicker {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .09em;
+      color: #2563eb;
+      margin-bottom: 3px;
+    }
+
+    .principal-standalone-title {
+      font-size: 25px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: #0f172a;
+    }
+
+    .principal-standalone-subtitle {
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .principal-standalone-school {
+      text-align: right;
+      flex: 0 0 auto;
+    }
+
+    .principal-standalone-school-name {
+      font-weight: 800;
+      font-size: 13px;
+      color: #0f766e;
+    }
+
+    .principal-standalone-school-meta {
+      margin-top: 3px;
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    .principal-standalone-content {
+      width: min(1400px, calc(100% - 48px));
+      margin: 24px auto 30px;
+      box-sizing: border-box;
+      flex: 1;
+    }
+
+    .principal-standalone-filter-card {
+      background: #ffffff;
+      border: 1px solid #dbe4ef;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, .07);
+    }
+
+    .principal-standalone-section-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 15px;
+    }
+
+    .principal-standalone-filter-grid {
+      display: grid;
+      grid-template-columns: minmax(200px, 1fr) minmax(200px, 1fr) auto;
+      gap: 14px;
+      align-items: end;
+    }
+
+    .principal-dashboard-field {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .principal-dashboard-field span {
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+    }
+
+    .principal-dashboard-field input {
+      width: 100%;
+      min-height: 42px;
+      box-sizing: border-box;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: #ffffff;
+      color: #0f172a;
+      font-size: 14px;
+    }
+
+    .principal-standalone-primary-button {
+      min-height: 42px;
+    }
+
+    .principal-teacher-dashboard-message {
+      min-height: 22px;
+      margin-top: 12px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .principal-teacher-dashboard-message.loading {
+      color: #2563eb;
+    }
+
+    .principal-teacher-dashboard-message.success {
+      color: #15803d;
+    }
+
+    .principal-teacher-dashboard-message.error {
+      color: #dc2626;
+    }
+
+    .principal-standalone-result,
+    .principal-standalone-detail {
+      margin-top: 18px;
+    }
+
+    .principal-standalone-result > *,
+    .principal-standalone-detail > * {
+      max-width: 100%;
+    }
+
+    .principal-standalone-footer {
+      margin-top: auto;
+      padding: 22px 24px;
+      text-align: center;
+      background: #ffffff;
+      border-top: 1px solid #dbe4ef;
+    }
+
+    .principal-standalone-footer-name {
+      color: #0f766e;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .principal-standalone-footer-meta {
+      margin-top: 5px;
+      color: #64748b;
+      font-size: 11px;
+    }
+
+    body.principal-teacher-standalone-mode {
+      overflow-x: hidden;
+    }
+
+    body.principal-teacher-standalone-mode > *:not(#principalTeacherAttendancePage) {
+      /* elemen aplikasi lama tetap ada, tetapi halaman standalone berada di atasnya */
+    }
+
+    @media (max-width: 900px) {
+
+      .principal-teacher-dashboard-launcher {
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .principal-launcher-content {
+        flex-basis: calc(100% - 80px);
+      }
+
+      .principal-launcher-button {
+        width: 100%;
+      }
+
+      .principal-standalone-header {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 16px;
+      }
+
+      .principal-standalone-header-left {
+        width: 100%;
+        align-items: flex-start;
+      }
+
+      .principal-standalone-school {
+        display: none;
+      }
+
+      .principal-standalone-content {
+        width: calc(100% - 24px);
+        margin-top: 14px;
+      }
+
+      .principal-standalone-filter-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .principal-standalone-primary-button {
+        width: 100%;
+      }
+
+      .principal-standalone-title {
+        font-size: 21px;
+      }
+    }
+
+    @media (max-width: 600px) {
+
+      .principal-teacher-dashboard-launcher {
+        padding: 16px;
+      }
+
+      .principal-launcher-icon {
+        width: 44px;
+        height: 44px;
+        flex-basis: 44px;
+      }
+
+      .principal-launcher-title {
+        font-size: 18px;
+      }
+
+      .principal-launcher-subtitle {
+        font-size: 12px;
+      }
+
+      .principal-standalone-header-left {
+        gap: 10px;
+      }
+
+      .principal-standalone-back-button {
+        padding: 9px 11px;
+      }
+
+      .principal-standalone-filter-card {
+        padding: 15px;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
 /* ============================================================
    45. INITIALIZE
 ============================================================ */
@@ -7156,6 +9592,10 @@ async function initializeApp() {
 
 
   injectDashboardStyles();
+  injectUnifiedUIStyles();
+  injectPrincipalDashboardRefinementStyles();
+  injectPrincipalStandaloneStyles();
+  normalizeAppBrandingLayout();
   injectAppFooter();
 
 
@@ -7236,10 +9676,429 @@ async function initializeApp() {
 
   startAutoRefresh();
 
+  updatePrincipalDashboardMode();
+  setInterval(updatePrincipalDashboardMode, 800);
+
 
   console.log(
     'APP READY'
   );
+}
+
+
+
+
+/* ============================================================
+   V20.7 - UNIFIED UI / BRANDING / PRINCIPAL LAYOUT
+   ============================================================ */
+function injectUnifiedUIStyles() {
+  if (document.getElementById('unified-ui-v206')) return;
+
+  const style = document.createElement('style');
+  style.id = 'unified-ui-v206';
+  style.textContent = `
+    :root {
+      --app-bg: #f3f6fa;
+      --app-card: #ffffff;
+      --app-text: #0f172a;
+      --app-muted: #64748b;
+      --app-border: #dbe3ec;
+      --app-primary: #0f766e;
+      --app-primary-2: #115e59;
+      --app-blue: #2563eb;
+      --app-radius: 18px;
+      --app-shadow: 0 8px 28px rgba(15,23,42,.07);
+    }
+
+    html, body {
+      min-height: 100%;
+    }
+
+    body {
+      background: var(--app-bg) !important;
+      color: var(--app-text);
+    }
+
+    /* Lebar utama dibuat konsisten, tetapi tetap responsif. */
+    .container,
+    .main-container,
+    main {
+      box-sizing: border-box !important;
+      width: min(1180px, calc(100% - 32px)) !important;
+      max-width: 1180px !important;
+      margin-left: auto !important;
+      margin-right: auto !important;
+    }
+
+    /* Branding sekolah selalu berada di tengah. */
+    .app-brand-header-unified {
+      text-align: center !important;
+    }
+
+    .app-brand-title-unified {
+      display: block !important;
+      width: 100% !important;
+      text-align: center !important;
+      margin-left: auto !important;
+      margin-right: auto !important;
+    }
+
+    .app-brand-logo-unified {
+      display: block !important;
+      margin-left: auto !important;
+      margin-right: auto !important;
+      float: none !important;
+    }
+
+    /* Header utama: logo di atas, judul di tengah, info di bawah. */
+    .app-brand-header-unified .app-brand-logo-unified {
+      margin-bottom: 8px !important;
+    }
+
+    /* Dashboard Kepala Sekolah tidak lagi menempel sebagai kartu hijau sempit. */
+    body.principal-dashboard-mode #dashboard {
+      width: 100% !important;
+      max-width: 1180px !important;
+      margin: 18px auto 28px !important;
+      padding: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      border: 0 !important;
+    }
+
+    body.principal-dashboard-mode #dashboard > * {
+      box-sizing: border-box !important;
+      max-width: 100% !important;
+    }
+
+    body.principal-dashboard-mode .principal-teacher-dashboard-panel {
+      width: 100% !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 24px !important;
+      border: 1px solid var(--app-border) !important;
+      border-radius: var(--app-radius) !important;
+      background: var(--app-card) !important;
+      box-shadow: var(--app-shadow) !important;
+    }
+
+    body.principal-dashboard-mode .principal-dashboard-header {
+      display: block !important;
+      padding-bottom: 16px !important;
+      border-bottom: 1px solid #edf2f7 !important;
+    }
+
+    body.principal-dashboard-mode .principal-dashboard-title {
+      font-size: 23px !important;
+      line-height: 1.25 !important;
+    }
+
+    body.principal-dashboard-mode .principal-dashboard-subtitle {
+      max-width: 900px !important;
+      font-size: 12px !important;
+    }
+
+    body.principal-dashboard-mode .principal-dashboard-controls {
+      grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) auto !important;
+      gap: 12px !important;
+      padding: 16px 0 4px !important;
+    }
+
+    body.principal-dashboard-mode .principal-summary-grid,
+    body.principal-dashboard-mode .principal-detail-summary-grid {
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)) !important;
+      gap: 10px !important;
+    }
+
+    body.principal-dashboard-mode .principal-summary-card,
+    body.principal-dashboard-mode .principal-detail-stat {
+      min-width: 0 !important;
+      border-radius: 14px !important;
+    }
+
+    body.principal-dashboard-mode .principal-table-wrap,
+    body.principal-dashboard-mode .principal-detail-table-wrap {
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow-x: auto !important;
+      border-radius: 14px !important;
+    }
+
+    /* Semua kartu dashboard memiliki bahasa visual yang sama. */
+    #dashboard .dashboard-section,
+    #dashboard .dashboard-card,
+    #dashboard .card,
+    #dashboard .panel,
+    #dashboard .section-card,
+    #dashboard .teacher-attendance-panel,
+    #dashboard .teacher-recap-panel,
+    #dashboard .admin-recap-panel,
+    #dashboard .principal-teacher-dashboard-panel {
+      border-radius: var(--app-radius) !important;
+      border-color: var(--app-border) !important;
+      box-shadow: var(--app-shadow) !important;
+    }
+
+    /* Login modal dibuat satu keluarga dengan dashboard. */
+    #loginModal,
+    .login-modal,
+    .modal[role="dialog"] {
+      border-radius: 18px !important;
+    }
+
+    #loginModal .modal-content,
+    .login-modal .modal-content,
+    .modal[role="dialog"] .modal-content {
+      border-radius: 18px !important;
+      border: 1px solid var(--app-border) !important;
+      box-shadow: 0 18px 50px rgba(15,23,42,.18) !important;
+      background: #fff !important;
+    }
+
+    /* Input dan tombol konsisten di seluruh aplikasi. */
+    #dashboard input,
+    #dashboard select,
+    #dashboard textarea,
+    #loginModal input,
+    .login-modal input {
+      border-radius: 10px !important;
+      border-color: #cbd5e1 !important;
+      box-sizing: border-box !important;
+    }
+
+    #dashboard button,
+    #loginModal button,
+    .login-modal button {
+      border-radius: 10px;
+    }
+
+    /* Kepala Sekolah tidak menampilkan Jadwal Mengajar Hari Ini. */
+    body.principal-dashboard-mode #teacherSchedulePanel,
+    body.principal-dashboard-mode #teacherSchedulesPanel,
+    body.principal-dashboard-mode #jadwalMengajarHariIni,
+    body.principal-dashboard-mode [data-section="teacher-schedule-today"] {
+      display: none !important;
+    }
+
+    /* Jika panel jadwal tidak memiliki ID, sembunyikan berdasarkan judul. */
+    body.principal-dashboard-mode .dashboard-section.principal-hide-today-schedule,
+    body.principal-dashboard-mode .card.principal-hide-today-schedule,
+    body.principal-dashboard-mode .panel.principal-hide-today-schedule {
+      display: none !important;
+    }
+
+    @media (max-width: 900px) {
+      .container,
+      .main-container,
+      main {
+        width: calc(100% - 24px) !important;
+      }
+
+      body.principal-dashboard-mode .principal-dashboard-controls {
+        grid-template-columns: 1fr !important;
+      }
+
+      body.principal-dashboard-mode .principal-dashboard-button {
+        width: 100% !important;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .container,
+      .main-container,
+      main {
+        width: calc(100% - 16px) !important;
+      }
+
+      body.principal-dashboard-mode .principal-teacher-dashboard-panel {
+        padding: 15px !important;
+        border-radius: 14px !important;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function normalizeAppBrandingLayout() {
+  const appName = 'ABSENSI KARTU PELAJAR';
+  const elements = Array.from(document.querySelectorAll('body *'));
+
+  const title = elements.find(function(el) {
+    if (!el || el.children.length > 3) return false;
+    const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    return text === appName;
+  });
+
+  if (!title) return;
+
+  title.classList.add('app-brand-title-unified');
+
+  let root = title.closest('header, .header, .app-header, .site-header, .hero, .top-header');
+  if (!root) {
+    root = title.parentElement;
+    for (let i = 0; i < 2 && root && root.parentElement; i++) {
+      if (root.querySelector('img')) break;
+      root = root.parentElement;
+    }
+  }
+
+  if (!root) return;
+
+  root.classList.add('app-brand-header-unified');
+
+  const images = Array.from(root.querySelectorAll('img'));
+  if (images.length) {
+    images[0].classList.add('app-brand-logo-unified');
+  }
+}
+
+function markPrincipalTodaySchedulePanels() {
+  if (!currentUser) return;
+
+  const role = String(currentUser.role || '').trim().toUpperCase();
+  const isPrincipal = role === 'KEPALA_SEKOLAH';
+  document.body.classList.toggle('principal-dashboard-mode', isPrincipal);
+
+  if (!isPrincipal) return;
+
+  document.querySelectorAll('section, .card, .panel, .dashboard-card, .dashboard-section').forEach(function(el) {
+    if (!el || el.id === 'dashboard') return;
+
+    const text = (el.innerText || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (
+      text.startsWith('📚 jadwal mengajar hari ini') ||
+      text.startsWith('jadwal mengajar hari ini') ||
+      text.includes('jadwal mengajar hari ini') && text.length < 500
+    ) {
+      el.classList.add('principal-hide-today-schedule');
+      el.style.display = 'none';
+    }
+  });
+}
+
+/* ============================================================
+   V20.4 - DASHBOARD KEPALA SEKOLAH UI REFINEMENT
+   ============================================================ */
+function injectPrincipalDashboardRefinementStyles() {
+  if (document.getElementById('principal-dashboard-refinement-v204')) return;
+
+  const style = document.createElement('style');
+  style.id = 'principal-dashboard-refinement-v204';
+  style.textContent = `
+    /* Saat dashboard kepala sekolah tampil, gunakan lebar layar yang lebih lega */
+    body.principal-dashboard-mode .container,
+    body.principal-dashboard-mode main,
+    body.principal-dashboard-mode .main-container {
+      max-width: 1400px !important;
+      width: calc(100% - 32px) !important;
+    }
+
+    body.principal-dashboard-mode #dashboard {
+      width: 100% !important;
+      max-width: 1400px !important;
+      margin: 18px auto 30px !important;
+    }
+
+    body.principal-dashboard-mode #dashboard > * {
+      max-width: 100% !important;
+    }
+
+    /* Panel utama Kepala Sekolah */
+    body.principal-dashboard-mode .principal-dashboard-panel,
+    body.principal-dashboard-mode #principalTeacherAttendancePanel,
+    body.principal-dashboard-mode [id*="principalTeacherAttendance"] {
+      width: 100% !important;
+      max-width: none !important;
+      box-sizing: border-box;
+    }
+
+    /* Kartu ringkasan */
+    body.principal-dashboard-mode .principal-summary-grid,
+    body.principal-dashboard-mode .summary-grid {
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+      width: 100% !important;
+    }
+
+    /* Tabel monitoring guru */
+    body.principal-dashboard-mode .principal-teacher-table-wrap,
+    body.principal-dashboard-mode .teacher-attendance-table-wrap {
+      width: 100% !important;
+      overflow-x: auto !important;
+      border-radius: 14px !important;
+    }
+
+    body.principal-dashboard-mode .principal-teacher-table,
+    body.principal-dashboard-mode table {
+      width: 100% !important;
+    }
+
+    /* Filter tanggal dibuat lebih seimbang */
+    body.principal-dashboard-mode .principal-filter-grid {
+      display: grid !important;
+      grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) auto !important;
+      gap: 14px !important;
+      align-items: end !important;
+    }
+
+    @media (max-width: 900px) {
+      body.principal-dashboard-mode .principal-filter-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+    /* Hilangkan area Jadwal Mengajar Hari Ini saat Kepala Sekolah login */
+    body.principal-dashboard-mode #teacherSchedulePanel,
+    body.principal-dashboard-mode #teacherSchedulesPanel,
+    body.principal-dashboard-mode #jadwalMengajarHariIni,
+    body.principal-dashboard-mode [data-section="teacher-schedule-today"] {
+      display: none !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
+
+/* ============================================================
+   V20.4 - PRINCIPAL DASHBOARD MODE
+   ============================================================ */
+function updatePrincipalDashboardMode() {
+  const dashboard = document.getElementById('dashboard');
+  if (!dashboard) return;
+
+  const textContent = (dashboard.innerText || '').toUpperCase();
+  const isPrincipal =
+    textContent.includes('DASHBOARD KEPALA SEKOLAH') ||
+    textContent.includes('KEPALA SEKOLAH');
+
+  document.body.classList.toggle('principal-dashboard-mode', isPrincipal);
+  markPrincipalTodaySchedulePanels();
+  normalizeAppBrandingLayout();
+
+  /* Jangan tampilkan panel jadwal guru hari ini di dashboard Kepala Sekolah */
+  if (isPrincipal) {
+    const candidates = [
+      'teacherSchedulePanel',
+      'teacherSchedulesPanel',
+      'jadwalMengajarHariIni'
+    ];
+
+    candidates.forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+
+    document.querySelectorAll('section, .card, .panel, .dashboard-card').forEach(function(el) {
+      const t = (el.innerText || '').trim().toLowerCase();
+      if (
+        t.startsWith('📚 jadwal mengajar hari ini') ||
+        t.startsWith('jadwal mengajar hari ini')
+      ) {
+        el.style.display = 'none';
+      }
+    });
+  }
 }
 
 
@@ -7285,6 +10144,15 @@ window.logoutUser =
 window.selectTeacherSchedule =
   selectTeacherSchedule;
 
+window.handleTeacherCheckIn =
+  handleTeacherCheckIn;
+
+window.loadPrincipalTeacherAttendance =
+  loadPrincipalTeacherAttendance;
+
+window.loadPrincipalTeacherDetail =
+  loadPrincipalTeacherDetail;
+
 window.showAllAttendance =
   showAllAttendance;
 
@@ -7317,5 +10185,1029 @@ window.loadTeacherRecapOptions =
 
 
 /* ============================================================
-   END APP.JS V20.1 - WHATSAPP CENTER STANDALONE
+   END APP.JS V20.7 - UNIFIED UI + DASHBOARD KEPALA SEKOLAH + PRESENSI GURU + WHATSAPP CENTER
+============================================================ */
+
+
+/* ========================================================================
+ * V23 - INTEGRASI REKAP GURU BULANAN + EXPORT EXCEL/PDF
+ * ------------------------------------------------------------------------
+ * ADDITIVE ONLY:
+ * - Tidak mengubah index.html
+ * - Tidak mengubah style.css
+ * - Tidak menghapus/mengganti fungsi app.js existing
+ * - Menambahkan panel pada halaman Monitoring Kepala Sekolah
+ *
+ * Backend yang digunakan:
+ *   action: principalTeacherMonthlyRecap
+ *   action: exportPrincipalTeacherRecap
+ * ======================================================================== */
+
+(function() {
+  'use strict';
+
+  const V23_STYLE_ID = 'v23-rekap-guru-monitoring-style';
+  const V23_PANEL_ID = 'v23RekapGuruMonthlyPanel';
+  let v23ObserverStarted = false;
+  let v23Loading = false;
+  let v23State = {
+    bulan: '',
+    tahun: '',
+    guruId: '',
+    rows: [],
+    summary: null
+  };
+
+  function v23Esc(value) {
+    if (typeof escapeHTML === 'function') {
+      return escapeHTML(String(value == null ? '' : value));
+    }
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function v23MonthName(month) {
+    const names = [
+      '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return names[Number(month)] || String(month || '');
+  }
+
+  function v23TodayPeriod() {
+    const now = new Date();
+    return {
+      bulan: String(now.getMonth() + 1),
+      tahun: String(now.getFullYear())
+    };
+  }
+
+  function v23EnsureStyle() {
+    if (document.getElementById(V23_STYLE_ID)) return;
+
+    const style = document.createElement('style');
+    style.id = V23_STYLE_ID;
+    style.textContent = `
+      #${V23_PANEL_ID} {
+        margin: 18px 0 0;
+        padding: 18px;
+        border: 1px solid #dbe3ec;
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow: 0 7px 24px rgba(15, 23, 42, .06);
+      }
+
+      #${V23_PANEL_ID} .v23-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      #${V23_PANEL_ID} .v23-kicker {
+        color: #2563eb;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+      }
+
+      #${V23_PANEL_ID} .v23-title {
+        margin-top: 3px;
+        font-size: 19px;
+        font-weight: 900;
+        color: #0f172a;
+      }
+
+      #${V23_PANEL_ID} .v23-subtitle {
+        margin-top: 4px;
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      #${V23_PANEL_ID} .v23-controls {
+        display: grid;
+        grid-template-columns: 150px 120px minmax(220px, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+        margin-top: 15px;
+      }
+
+      #${V23_PANEL_ID} .v23-field span {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #475569;
+      }
+
+      #${V23_PANEL_ID} .v23-field select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 9px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 9px;
+        background: #fff;
+        color: #0f172a;
+      }
+
+      #${V23_PANEL_ID} .v23-load-button,
+      #${V23_PANEL_ID} .v23-export-button {
+        border: 0;
+        border-radius: 9px;
+        padding: 10px 14px;
+        font-weight: 800;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      #${V23_PANEL_ID} .v23-load-button {
+        background: #2563eb;
+        color: #fff;
+      }
+
+      #${V23_PANEL_ID} .v23-export-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        flex-wrap: wrap;
+        margin-top: 13px;
+        padding: 11px 12px;
+        border: 1px solid #dcfce7;
+        border-radius: 12px;
+        background: #f0fdf4;
+      }
+
+      #${V23_PANEL_ID} .v23-export-button.excel {
+        background: #15803d;
+        color: #fff;
+      }
+
+      #${V23_PANEL_ID} .v23-export-button.pdf {
+        background: #b91c1c;
+        color: #fff;
+      }
+
+      #${V23_PANEL_ID} .v23-export-button.download {
+        background: #0369a1;
+        color: #fff;
+      }
+
+      #${V23_PANEL_ID} .v23-export-button.download:hover {
+        filter: brightness(.95);
+      }
+
+      #${V23_PANEL_ID} button:disabled {
+        opacity: .6;
+        cursor: wait;
+      }
+
+      #${V23_PANEL_ID} .v23-message {
+        margin-top: 10px;
+        min-height: 18px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      #${V23_PANEL_ID} .v23-message.loading { color: #92400e; }
+      #${V23_PANEL_ID} .v23-message.success { color: #166534; }
+      #${V23_PANEL_ID} .v23-message.error { color: #b91c1c; }
+
+      #${V23_PANEL_ID} .v23-summary {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(90px, 1fr));
+        gap: 9px;
+        margin-top: 15px;
+      }
+
+      #${V23_PANEL_ID} .v23-stat {
+        padding: 10px;
+        border: 1px solid #e2e8f0;
+        border-radius: 11px;
+        background: #f8fafc;
+        text-align: center;
+      }
+
+      #${V23_PANEL_ID} .v23-stat span {
+        display: block;
+        color: #64748b;
+        font-size: 11px;
+      }
+
+      #${V23_PANEL_ID} .v23-stat strong {
+        display: block;
+        margin-top: 3px;
+        color: #0f172a;
+        font-size: 18px;
+      }
+
+      #${V23_PANEL_ID} .v23-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        margin-top: 14px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+      }
+
+      #${V23_PANEL_ID} table {
+        width: 100%;
+        min-width: 980px;
+        border-collapse: collapse;
+      }
+
+      #${V23_PANEL_ID} th,
+      #${V23_PANEL_ID} td {
+        padding: 9px 10px;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: center;
+        vertical-align: middle;
+        font-size: 12px;
+      }
+
+      #${V23_PANEL_ID} th {
+        background: #f8fafc;
+        color: #334155;
+        font-weight: 900;
+      }
+
+      #${V23_PANEL_ID} td:nth-child(2),
+      #${V23_PANEL_ID} td:nth-child(5) {
+        text-align: left;
+      }
+
+      #${V23_PANEL_ID} tr:last-child td {
+        border-bottom: 0;
+      }
+
+      #${V23_PANEL_ID} .v23-guru-name {
+        font-weight: 800;
+        color: #0f172a;
+      }
+
+      #${V23_PANEL_ID} .v23-guru-id {
+        margin-top: 2px;
+        color: #64748b;
+        font-size: 10px;
+      }
+
+      #${V23_PANEL_ID} .v23-percent {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-weight: 900;
+      }
+
+      #${V23_PANEL_ID} .v23-percent.good {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      #${V23_PANEL_ID} .v23-percent.warning {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      #${V23_PANEL_ID} .v23-percent.danger {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      #${V23_PANEL_ID} .v23-empty {
+        margin-top: 14px;
+        padding: 18px;
+        border-radius: 12px;
+        background: #f8fafc;
+        color: #64748b;
+        text-align: center;
+      }
+
+      @media (max-width: 900px) {
+        #${V23_PANEL_ID} .v23-controls {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        #${V23_PANEL_ID} .v23-controls .v23-field:nth-child(3),
+        #${V23_PANEL_ID} .v23-controls .v23-load-button {
+          grid-column: 1 / -1;
+        }
+
+        #${V23_PANEL_ID} .v23-summary {
+          grid-template-columns: repeat(3, 1fr);
+        }
+      }
+
+      @media (max-width: 600px) {
+        #${V23_PANEL_ID} {
+          padding: 13px;
+          border-radius: 14px;
+        }
+
+        #${V23_PANEL_ID} .v23-controls {
+          grid-template-columns: 1fr;
+        }
+
+        #${V23_PANEL_ID} .v23-controls .v23-field:nth-child(3),
+        #${V23_PANEL_ID} .v23-controls .v23-load-button {
+          grid-column: auto;
+        }
+
+        #${V23_PANEL_ID} .v23-summary {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  function v23PanelHTML() {
+    const period = v23TodayPeriod();
+
+    return `
+      <section id="${V23_PANEL_ID}">
+        <div class="v23-title-row">
+          <div>
+            <div class="v23-kicker">REKAP BULANAN & EXPORT</div>
+            <div class="v23-title">📊 Rekap Presensi Guru Bulanan</div>
+            <div class="v23-subtitle">
+              Data diambil dari REKAP_GURU_BULANAN. Pilih periode dan guru untuk melihat rekap, lalu export ke Excel atau PDF.
+            </div>
+          </div>
+        </div>
+
+        <div class="v23-controls">
+          <label class="v23-field">
+            <span>Bulan</span>
+            <select id="v23RekapBulan">
+              ${Array.from({length: 12}, function(_, i) {
+                const month = i + 1;
+                return '<option value="' + month + '"' +
+                  (String(month) === period.bulan ? ' selected' : '') + '>' +
+                  v23Esc(v23MonthName(month)) +
+                  '</option>';
+              }).join('')}
+            </select>
+          </label>
+
+          <label class="v23-field">
+            <span>Tahun</span>
+            <select id="v23RekapTahun">
+              <option value="2026">2026</option>
+              <option value="2027">2027</option>
+              <option value="2028">2028</option>
+            </select>
+          </label>
+
+          <label class="v23-field">
+            <span>Guru</span>
+            <select id="v23RekapGuruSelect">
+              <option value="">Semua Guru</option>
+            </select>
+          </label>
+
+          <button type="button" id="v23RekapLoadButton" class="v23-load-button">
+            🔄 Tampilkan Rekap
+          </button>
+        </div>
+
+        <div class="v23-export-row">
+          <strong style="font-size:12px;color:#166534;">Export:</strong>
+          <button type="button" id="v23ExportXlsxButton" class="v23-export-button excel">
+            📗 Excel (.xlsx)
+          </button>
+          <button type="button" id="v23ExportPdfButton" class="v23-export-button pdf">
+            📕 PDF
+          </button>
+          <button type="button" id="v23DownloadXlsxButton" class="v23-export-button download">
+            ⬇️ Download Excel
+          </button>
+          <button type="button" id="v23DownloadPdfButton" class="v23-export-button download">
+            ⬇️ Download PDF
+          </button>
+          <span id="v23ExportMessage" class="v23-message"></span>
+        </div>
+
+        <div id="v23RekapMessage" class="v23-message"></div>
+        <div id="v23RekapSummary"></div>
+        <div id="v23RekapResult"></div>
+      </section>
+    `;
+  }
+
+  function v23SetMessage(message, type) {
+    const el = document.getElementById('v23RekapMessage');
+    if (!el) return;
+    el.className = 'v23-message ' + (type || '');
+    el.textContent = message || '';
+  }
+
+  function v23SetExportMessage(message, type) {
+    const el = document.getElementById('v23ExportMessage');
+    if (!el) return;
+    el.className = 'v23-message ' + (type || '');
+    el.textContent = message || '';
+  }
+
+  function v23PopulateGuruOptions(rows, selectedGuruId) {
+    const select = document.getElementById('v23RekapGuruSelect');
+    if (!select) return;
+
+    const current = String(selectedGuruId || select.value || '');
+    const unique = {};
+
+    (Array.isArray(rows) ? rows : []).forEach(function(row) {
+      const id = String(row.guruId || '').trim();
+      const name = String(row.namaGuru || 'Guru').trim();
+      if (id) unique[id] = name;
+    });
+
+    const options = Object.keys(unique)
+      .sort(function(a, b) {
+        return unique[a].localeCompare(unique[b], 'id');
+      })
+      .map(function(id) {
+        return '<option value="' + v23Esc(id) + '"' +
+          (id === current ? ' selected' : '') + '>' +
+          v23Esc(unique[id]) + ' (' + v23Esc(id) + ')' +
+          '</option>';
+      })
+      .join('');
+
+    select.innerHTML = '<option value="">Semua Guru</option>' + options;
+
+    if (current && unique[current]) {
+      select.value = current;
+    } else {
+      select.value = '';
+    }
+  }
+
+  function v23RenderSummary(summary) {
+    summary = summary || {};
+    return `
+      <div class="v23-summary">
+        <div class="v23-stat"><span>Total Guru</span><strong>${Number(summary.totalGuru || 0)}</strong></div>
+        <div class="v23-stat"><span>Total Jadwal</span><strong>${Number(summary.totalJadwal || 0)}</strong></div>
+        <div class="v23-stat"><span>Hadir</span><strong>${Number(summary.hadir || 0)}</strong></div>
+        <div class="v23-stat"><span>Terlambat</span><strong>${Number(summary.terlambat || 0)}</strong></div>
+        <div class="v23-stat"><span>Izin</span><strong>${Number(summary.izin || 0)}</strong></div>
+        <div class="v23-stat"><span>Sakit</span><strong>${Number(summary.sakit || 0)}</strong></div>
+        <div class="v23-stat"><span>Alpa</span><strong>${Number(summary.alpa || 0)}</strong></div>
+      </div>
+    `;
+  }
+
+  function v23RenderTable(rows) {
+    rows = Array.isArray(rows) ? rows : [];
+
+    if (!rows.length) {
+      return `
+        <div class="v23-empty">
+          📭 Tidak ada data rekap guru untuk periode/filter yang dipilih.
+        </div>
+      `;
+    }
+
+    const body = rows.map(function(row, index) {
+      const percentage = Number(row.persentase || 0);
+      const cls = percentage >= 90 ? 'good' : percentage >= 75 ? 'warning' : 'danger';
+
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>
+            <div class="v23-guru-name">${v23Esc(row.namaGuru || '')}</div>
+            <div class="v23-guru-id">${v23Esc(row.guruId || '')}</div>
+          </td>
+          <td>${Number(row.totalJadwal || 0)}</td>
+          <td>${Number(row.hadir || 0)}</td>
+          <td>${Number(row.terlambat || 0)}</td>
+          <td>${Number(row.izin || 0)}</td>
+          <td>${Number(row.sakit || 0)}</td>
+          <td>${Number(row.alpa || 0)}</td>
+          <td>${Number(row.belumAbsen || 0)}</td>
+          <td>
+            <span class="v23-percent ${cls}">${percentage.toFixed(2)}%</span>
+          </td>
+          <td>${v23Esc(row.terakhirUpdate || '-')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="v23-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Guru</th>
+              <th>Jadwal</th>
+              <th>Hadir</th>
+              <th>Terlambat</th>
+              <th>Izin</th>
+              <th>Sakit</th>
+              <th>Alpa</th>
+              <th>Belum Absen</th>
+              <th>Persentase</th>
+              <th>Update</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  async function v23LoadRecap() {
+    if (v23Loading) return;
+
+    const role = String(currentUser?.role || '').toUpperCase();
+    if (!currentToken || role !== 'KEPALA_SEKOLAH') {
+      v23SetMessage('⛔ Rekap bulanan hanya dapat diakses Kepala Sekolah.', 'error');
+      return;
+    }
+
+    const bulan = String(document.getElementById('v23RekapBulan')?.value || '').trim();
+    const tahun = String(document.getElementById('v23RekapTahun')?.value || '').trim();
+    const guruId = String(document.getElementById('v23RekapGuruSelect')?.value || '').trim();
+
+    if (!bulan || !tahun) {
+      v23SetMessage('⚠️ Bulan dan tahun wajib dipilih.', 'error');
+      return;
+    }
+
+    const button = document.getElementById('v23RekapLoadButton');
+    if (button) {
+      button.disabled = true;
+      button.textContent = '⏳ Memuat...';
+    }
+
+    v23Loading = true;
+    v23SetMessage('⏳ Mengambil rekap guru bulanan...', 'loading');
+
+    try {
+      const result = await apiGet({
+        action: 'principalTeacherMonthlyRecap',
+        token: currentToken,
+        bulan: bulan,
+        tahun: tahun,
+        guruId: guruId
+      }, { timeoutMs: 120000 });
+
+      if (result?.status === 'SESSION_EXPIRED') {
+        if (typeof handleSessionExpired === 'function') {
+          handleSessionExpired();
+        }
+        return;
+      }
+
+      if (!result || !result.success) {
+        throw new Error(result?.message || 'Rekap guru gagal dimuat.');
+      }
+
+      v23State = {
+        bulan: String(result.bulan || bulan),
+        tahun: String(result.tahun || tahun),
+        guruId: guruId,
+        rows: Array.isArray(result.rows) ? result.rows : [],
+        summary: result.summary || {}
+      };
+
+      if (!guruId) {
+        v23PopulateGuruOptions(v23State.rows, '');
+      }
+
+      const summary = document.getElementById('v23RekapSummary');
+      const resultBox = document.getElementById('v23RekapResult');
+
+      if (summary) {
+        summary.innerHTML = v23RenderSummary(v23State.summary);
+      }
+
+      if (resultBox) {
+        resultBox.innerHTML =
+          '<div style="margin-top:13px;font-size:13px;font-weight:800;color:#334155;">' +
+          'Periode: ' + v23Esc(v23MonthName(Number(v23State.bulan))) + ' ' +
+          v23Esc(v23State.tahun) +
+          (guruId ? ' | Guru: ' + v23Esc(guruId) : ' | Semua Guru') +
+          '</div>' +
+          v23RenderTable(v23State.rows);
+      }
+
+      v23SetMessage(
+        '✅ Rekap ' + v23MonthName(Number(v23State.bulan)) + ' ' + v23State.tahun + ' berhasil dimuat.',
+        'success'
+      );
+
+    } catch (error) {
+      console.error('V23 REKAP GURU ERROR:', error);
+      v23SetMessage('❌ ' + (error?.message || 'Gagal mengambil rekap guru.'), 'error');
+    } finally {
+      v23Loading = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = '🔄 Tampilkan Rekap';
+      }
+    }
+  }
+
+  async function v23Export(format) {
+    const role = String(currentUser?.role || '').toUpperCase();
+    if (!currentToken || role !== 'KEPALA_SEKOLAH') {
+      v23SetExportMessage('⛔ Hanya Kepala Sekolah.', 'error');
+      return;
+    }
+
+    const bulan = String(document.getElementById('v23RekapBulan')?.value || v23State.bulan || '').trim();
+    const tahun = String(document.getElementById('v23RekapTahun')?.value || v23State.tahun || '').trim();
+    const guruId = String(document.getElementById('v23RekapGuruSelect')?.value || '').trim();
+
+    if (!bulan || !tahun) {
+      v23SetExportMessage('⚠️ Pilih bulan dan tahun terlebih dahulu.', 'error');
+      return;
+    }
+
+    const xlsxButton = document.getElementById('v23ExportXlsxButton');
+    const pdfButton = document.getElementById('v23ExportPdfButton');
+
+    [xlsxButton, pdfButton].forEach(function(button) {
+      if (button) button.disabled = true;
+    });
+
+    v23SetExportMessage(
+      '⏳ Menyiapkan file ' + (format === 'pdf' ? 'PDF' : 'Excel') + '...',
+      'loading'
+    );
+
+    try {
+      const result = await apiGet({
+        action: 'exportPrincipalTeacherRecap',
+        token: currentToken,
+        bulan: bulan,
+        tahun: tahun,
+        format: format,
+        guruId: guruId
+      }, { timeoutMs: 120000 });
+
+      if (result?.status === 'SESSION_EXPIRED') {
+        if (typeof handleSessionExpired === 'function') {
+          handleSessionExpired();
+        }
+        return;
+      }
+
+      if (!result || !result.success) {
+        throw new Error(result?.message || 'Export gagal.');
+      }
+
+      const url = result.downloadUrl || result.fileUrl || '';
+      if (!url) {
+        throw new Error('File berhasil dibuat tetapi URL file tidak tersedia.');
+      }
+
+      v23SetExportMessage(
+        '✅ ' + result.fileName + ' berhasil dibuat. Membuka file...',
+        'success'
+      );
+
+      window.open(url, '_blank', 'noopener,noreferrer');
+
+    } catch (error) {
+      console.error('V23 EXPORT REKAP GURU ERROR:', error);
+      v23SetExportMessage('❌ ' + (error?.message || 'Export gagal.'), 'error');
+    } finally {
+      [xlsxButton, pdfButton].forEach(function(button) {
+        if (button) button.disabled = false;
+      });
+    }
+  }
+
+  async function v23DownloadToDevice(format) {
+    const bulan = String(document.getElementById('v23RekapBulan')?.value || '').trim();
+    const tahun = String(document.getElementById('v23RekapTahun')?.value || '').trim();
+    const guruId = String(document.getElementById('v23RekapGuruSelect')?.value || '').trim();
+
+    if (!bulan || !tahun) {
+      v23SetExportMessage('⚠️ Pilih bulan dan tahun terlebih dahulu.', 'error');
+      return;
+    }
+
+    const xlsxButton = document.getElementById('v23DownloadXlsxButton');
+    const pdfButton = document.getElementById('v23DownloadPdfButton');
+    [xlsxButton, pdfButton].forEach(function(button) {
+      if (button) button.disabled = true;
+    });
+
+    const label = format === 'pdf' ? 'PDF' : 'Excel';
+    v23SetExportMessage('⏳ Menyiapkan ' + label + ' untuk diunduh...', 'loading');
+
+    try {
+      const result = await apiGet({
+        action: 'exportPrincipalTeacherRecap',
+        token: currentToken,
+        bulan: bulan,
+        tahun: tahun,
+        format: format,
+        guruId: guruId
+      }, { timeoutMs: 120000 });
+
+      if (result?.status === 'SESSION_EXPIRED') {
+        if (typeof handleSessionExpired === 'function') handleSessionExpired();
+        return;
+      }
+
+      if (!result || !result.success) {
+        throw new Error(result?.message || 'Download gagal.');
+      }
+
+      const url = result.downloadUrl || '';
+      if (!url) throw new Error('URL download tidak tersedia.');
+
+      // Backend menyediakan downloadUrl Google Drive dengan export=download.
+      // Anchor download membantu browser PC/HP memulai proses unduh.
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = result.fileName || ('Rekap_Presensi_Guru.' + (format === 'pdf' ? 'pdf' : 'xlsx'));
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      setTimeout(function() {
+        try { anchor.remove(); } catch (_) {}
+      }, 1500);
+
+      v23SetExportMessage(
+        '⬇️ ' + (result.fileName || label) + ' sedang diunduh. Jika browser meminta izin, pilih Simpan/Download.',
+        'success'
+      );
+    } catch (error) {
+      console.error('V24 DOWNLOAD REKAP GURU ERROR:', error);
+      v23SetExportMessage('❌ ' + (error?.message || 'Download gagal.'), 'error');
+    } finally {
+      [xlsxButton, pdfButton].forEach(function(button) {
+        if (button) button.disabled = false;
+      });
+    }
+  }
+
+  function v23BindEvents() {
+    const loadButton = document.getElementById('v23RekapLoadButton');
+    const xlsxButton = document.getElementById('v23ExportXlsxButton');
+    const pdfButton = document.getElementById('v23ExportPdfButton');
+    const downloadXlsxButton = document.getElementById('v23DownloadXlsxButton');
+    const downloadPdfButton = document.getElementById('v23DownloadPdfButton');
+    const month = document.getElementById('v23RekapBulan');
+    const year = document.getElementById('v23RekapTahun');
+    const guru = document.getElementById('v23RekapGuruSelect');
+
+    if (year) {
+      const allowedYears = ['2026', '2027', '2028'];
+      if (!allowedYears.includes(String(year.value))) {
+        year.value = '2026';
+      }
+    }
+
+    if (loadButton && !loadButton.dataset.boundV23) {
+      loadButton.dataset.boundV23 = '1';
+      loadButton.addEventListener('click', v23LoadRecap);
+    }
+
+    if (xlsxButton && !xlsxButton.dataset.boundV23) {
+      xlsxButton.dataset.boundV23 = '1';
+      xlsxButton.addEventListener('click', function() { v23Export('xlsx'); });
+    }
+
+    if (pdfButton && !pdfButton.dataset.boundV23) {
+      pdfButton.dataset.boundV23 = '1';
+      pdfButton.addEventListener('click', function() { v23Export('pdf'); });
+    }
+
+    if (downloadXlsxButton && !downloadXlsxButton.dataset.boundV24) {
+      downloadXlsxButton.dataset.boundV24 = '1';
+      downloadXlsxButton.addEventListener('click', function() { v23DownloadToDevice('xlsx'); });
+    }
+
+    if (downloadPdfButton && !downloadPdfButton.dataset.boundV24) {
+      downloadPdfButton.dataset.boundV24 = '1';
+      downloadPdfButton.addEventListener('click', function() { v23DownloadToDevice('pdf'); });
+    }
+
+    [month, year, guru].forEach(function(el) {
+      if (!el || el.dataset.boundV23Change) return;
+      el.dataset.boundV23Change = '1';
+      el.addEventListener('change', function() {
+        v23SetExportMessage('', '');
+      });
+    });
+  }
+
+  function v23InjectPanel() {
+    const page = document.getElementById('principalTeacherAttendancePage');
+    if (!page) return false;
+    if (document.getElementById(V23_PANEL_ID)) return true;
+
+    const detail = document.getElementById('principalTeacherDetailResult');
+    const panel = document.createElement('div');
+    panel.innerHTML = v23PanelHTML();
+    const section = panel.firstElementChild;
+    if (!section) return false;
+
+    if (detail && detail.parentNode) {
+      detail.parentNode.insertBefore(section, detail.nextSibling);
+    } else {
+      const content = page.querySelector('.principal-standalone-content');
+      if (content) content.appendChild(section);
+      else page.appendChild(section);
+    }
+
+    v23EnsureStyle();
+    v23BindEvents();
+    return true;
+  }
+
+  function v23StartObserver() {
+    if (v23ObserverStarted) return;
+    v23ObserverStarted = true;
+
+    v23EnsureStyle();
+
+    const tryInject = function() {
+      if (v23InjectPanel()) return;
+    };
+
+    tryInject();
+
+    const observer = new MutationObserver(function() {
+      if (document.getElementById('principalTeacherAttendancePage')) {
+        tryInject();
+        if (document.getElementById(V23_PANEL_ID)) {
+          observer.disconnect();
+        }
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
+
+  function v23PublicOpen() {
+    v23StartObserver();
+    setTimeout(v23InjectPanel, 50);
+    setTimeout(v23InjectPanel, 300);
+    setTimeout(v23InjectPanel, 1000);
+  }
+
+  /*
+   * Jalankan observer setelah DOM siap. Tidak mengganti fungsi existing.
+   */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', v23StartObserver, { once: true });
+  } else {
+    v23StartObserver();
+  }
+
+  /*
+   * Observer tetap aktif untuk halaman monitoring yang dibuat secara dinamis.
+   */
+  window.v23OpenRekapGuruMonitoring = v23PublicOpen;
+  window.v23LoadRekapGuruBulanan = v23LoadRecap;
+  window.v23ExportRekapGuru = v23Export;
+  window.v24DownloadRekapGuru = v23DownloadToDevice;
+
+})();
+
+/* ========================================================================
+ * END V23 - REKAP GURU BULANAN + EXPORT EXCEL/PDF
+ * ======================================================================== */
+
+/* ============================================================
+   V25 - PUSAT KESEHATAN SISTEM / PRODUCTIZATION
+   ADDITIVE ONLY - tidak mengubah index.html / style.css / header
+============================================================ */
+(function(){
+  'use strict';
+
+  const PANEL_ID='v25SystemHealthPanel';
+  const STYLE_ID='v25SystemHealthStyle';
+
+  function roleAllowed(){
+    const r=String(currentUser?.role||'').toUpperCase();
+    return r==='ADMIN' || r==='KEPALA_SEKOLAH';
+  }
+
+  function injectStyle(){
+    if(document.getElementById(STYLE_ID)) return;
+    const s=document.createElement('style');
+    s.id=STYLE_ID;
+    s.textContent=`
+      #${PANEL_ID}{margin:18px 0;padding:20px;border:1px solid rgba(100,116,139,.22);border-radius:18px;background:var(--card-bg,#fff);box-shadow:0 8px 28px rgba(15,23,42,.08)}
+      #${PANEL_ID} .v25-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+      #${PANEL_ID} h3{margin:0;font-size:20px}
+      #${PANEL_ID} .v25-sub{margin:5px 0 0;opacity:.72;font-size:13px}
+      #${PANEL_ID} .v25-actions{display:flex;gap:8px;flex-wrap:wrap}
+      #${PANEL_ID} button{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:700}
+      #${PANEL_ID} .v25-primary{background:#2563eb;color:#fff}
+      #${PANEL_ID} .v25-secondary{background:#eef2ff;color:#3730a3}
+      #${PANEL_ID} .v25-summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin:16px 0}
+      #${PANEL_ID} .v25-stat{padding:14px;border-radius:14px;background:rgba(148,163,184,.10)}
+      #${PANEL_ID} .v25-stat strong{display:block;font-size:25px;line-height:1.1}
+      #${PANEL_ID} .v25-stat span{font-size:12px;opacity:.72}
+      #${PANEL_ID} .v25-ok{color:#15803d}.v25-warn{color:#b45309}.v25-error{color:#b91c1c}
+      #${PANEL_ID} .v25-check{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid rgba(148,163,184,.18);font-size:13px}
+      #${PANEL_ID} .v25-check:last-child{border-bottom:0}
+      #${PANEL_ID} .v25-status{font-weight:800;white-space:nowrap}
+      #${PANEL_ID} .v25-detail{opacity:.72;text-align:right}
+      #${PANEL_ID} .v25-loading{padding:15px;text-align:center;opacity:.7}
+      @media(max-width:700px){#${PANEL_ID} .v25-summary{grid-template-columns:repeat(2,1fr)}#${PANEL_ID} .v25-check{display:block}#${PANEL_ID} .v25-detail{text-align:left;margin-top:4px}}
+    `;
+    document.head.appendChild(s);
+  }
+
+  function getDashboard(){ return document.getElementById('dashboard'); }
+
+  function ensurePanel(){
+    if(!roleAllowed()) return null;
+    const dashboard=getDashboard();
+    if(!dashboard) return null;
+    injectStyle();
+    let panel=document.getElementById(PANEL_ID);
+    if(panel) return panel;
+    panel=document.createElement('section');
+    panel.id=PANEL_ID;
+    panel.innerHTML=`
+      <div class="v25-head">
+        <div><h3>🛠️ Pusat Kesehatan Sistem</h3><div class="v25-sub">Pemeriksaan kesiapan sistem absensi, WhatsApp, trigger, Anti-Spam, Queue, dan Alpa otomatis.</div></div>
+        <div class="v25-actions"><button class="v25-primary" id="v25CheckBtn">🔍 Cek Sistem</button></div>
+      </div>
+      <div id="v25HealthBody"><div class="v25-loading">Belum diperiksa.</div></div>`;
+    dashboard.appendChild(panel);
+    panel.querySelector('#v25CheckBtn').addEventListener('click',loadHealth);
+    return panel;
+  }
+
+  function statusClass(status){
+    status=String(status||'').toUpperCase();
+    return status==='OK'?'v25-ok':status==='ERROR'?'v25-error':'v25-warn';
+  }
+
+  async function loadHealth(){
+    const panel=ensurePanel();
+    if(!panel) return;
+    const body=panel.querySelector('#v25HealthBody');
+    const btn=panel.querySelector('#v25CheckBtn');
+    body.innerHTML='<div class="v25-loading">⏳ Memeriksa sistem...</div>';
+    if(btn) btn.disabled=true;
+    try{
+      const result=await apiGet({action:'systemHealthDashboard',token:currentToken||''});
+      if(result && result.sessionExpired){
+        if(typeof window.handleSessionExpired==='function') window.handleSessionExpired();
+        return;
+      }
+      if(!result || result.success===false && !result.summary){
+        throw new Error(result?.message||'Gagal membaca kesehatan sistem.');
+      }
+      const summary=result.summary||{};
+      const checks=Array.isArray(result.checks)?result.checks:[];
+      body.innerHTML=`
+        <div class="v25-summary">
+          <div class="v25-stat"><strong class="v25-ok">${Number(summary.ok||0)}</strong><span>Komponen OK</span></div>
+          <div class="v25-stat"><strong class="v25-warn">${Number(summary.warning||0)}</strong><span>Warning</span></div>
+          <div class="v25-stat"><strong class="v25-error">${Number(summary.error||0)}</strong><span>Error</span></div>
+          <div class="v25-stat"><strong>${Number(summary.missingSheets||0)}</strong><span>Sheet Kurang</span></div>
+        </div>
+        <div>${checks.map(c=>`<div class="v25-check"><div><strong class="${statusClass(c.status)}">${escapeHTML(c.key||'-')}</strong></div><div class="v25-detail">${escapeHTML(c.detail||'')}</div></div>`).join('')}</div>`;
+    }catch(err){
+      body.innerHTML='<div class="v25-loading v25-error">❌ '+escapeHTML(err.message||String(err))+'</div>';
+    }finally{
+      if(btn) btn.disabled=false;
+    }
+  }
+
+  function boot(){
+    if(!roleAllowed()) return;
+    ensurePanel();
+  }
+
+  window.v25OpenSystemHealth=boot;
+  window.v25LoadSystemHealth=loadHealth;
+
+  const observer=new MutationObserver(function(){
+    if(roleAllowed()) ensurePanel();
+  });
+  observer.observe(document.body,{childList:true,subtree:true});
+  setTimeout(boot,700);
+  setTimeout(boot,1800);
+})();
+
+/* ============================================================
+   END V25 - PUSAT KESEHATAN SISTEM
 ============================================================ */
