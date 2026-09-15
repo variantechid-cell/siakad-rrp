@@ -2,578 +2,271 @@
 <html lang="id">
 
 <head>
-
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <meta
-    name="theme-color"
-    content="#0f766e"
-  >
-
-  <title>
-    Absensi Digital Guru Mapel
-  </title>
-
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
-
-  <script
-    src="https://unpkg.com/html5-qrcode"
-    defer
-  ></script>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f766e">
+  <title>Absensi Kartu Pelajar | SMP &amp; SMA Baitul Ulum</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/html5-qrcode" defer></script>
 </head>
-
 
 <body>
 
 <main class="container">
 
-
   <!-- =====================================================
-       HEADER
+       HEADER UTAMA (RAPI, SIMETRIS & ESTETIK)
   ====================================================== -->
+  <header class="header" id="mainHeader">
 
-  <header class="header">
+    <!-- Baris Atas: Indikator Status & Tombol Login/Logout -->
+    <div class="header-topbar">
+      <div class="header-status-pill">
+        <span class="status-indicator-dot"></span>
+        <span class="status-indicator-text">Sistem Online</span>
+      </div>
 
-    <div class="header-top">
+      <div class="header-auth-action">
+        <button
+          id="loginButton"
+          class="login-button"
+          type="button"
+          title="Login Guru atau Administrator"
+        >
+          🔐 Login Guru/Admin
+        </button>
+      </div>
+    </div>
 
-      <h1 class="school-title">
-
+    <!-- Area Tengah: Logo di Atas, Judul & Nama Sekolah di Bawahnya (Simetris Center) -->
+    <div class="header-brand">
+      <div class="school-logo-container">
         <img
           src="https://raw.githubusercontent.com/variantechid-cell/SAD-BaitulUlum/34bb3d76548d0ba83efc5541b03527041ba5daed/Desain%20tanpa%20judul.png"
           class="school-logo"
-          alt="Logo SMP Baitul Ulum"
+          alt="Logo SMP &amp; SMA Baitul Ulum"
         >
+      </div>
 
-        <span>
-           ABSENSI DIGITAL GURU
-        </span>
-
+      <h1 class="school-title">
+        <span>ABSENSI KARTU PELAJAR</span>
       </h1>
 
+      <p class="school-name">
+        SMP &amp; SMA BAITUL ULUM BOARDING SCHOOL
+      </p>
     </div>
 
-
-    <p class="school-name">
-      Mapel Informatika (MTs) &amp; Mapel Produktif SMK TJKT
-    </p>
-    
-
+    <!-- Area Bawah: Tanggal & Waktu (Kapsul Glassmorphism) -->
     <div class="datetime">
-
-      <div id="currentDate">
+      <div id="currentDate" class="datetime-badge">
         Memuat tanggal...
       </div>
 
-      <div id="currentTime">
+      <div id="currentTime" class="datetime-badge font-mono">
         Memuat waktu...
       </div>
-
     </div>
-<button
-        id="loginButton"
-        class="login-button"
-        type="button"
-      >
-        🔐 Login Guru/Admin
-      </button>
+
   </header>
 
 
   <!-- =====================================================
        SCANNER
   ====================================================== -->
-
-  <section
-    id="scannerCard"
-    class="scanner-card"
-  >
-
+  <section id="scannerCard" class="scanner-card">
     <div id="reader"></div>
 
-
-    <div
-      id="status"
-      class="status"
-    >
+    <div id="status" class="status">
       🟢 Scanner siap.
     </div>
 
-
     <div class="buttons">
-
-      <button
-        id="startButton"
-        type="button"
-      >
+      <button id="startButton" type="button">
         📷 Mulai Scanner
       </button>
-
     </div>
-
 
     <div class="auto-scan-control">
-
       <label for="autoScanToggle">
-
-        <input
-          type="checkbox"
-          id="autoScanToggle"
-        >
-
+        <input type="checkbox" id="autoScanToggle">
         Scan otomatis
-
       </label>
-
-
-      <span
-        id="autoScanLabel"
-        class="auto-label"
-      >
+      <span id="autoScanLabel" class="auto-label">
         MATI
       </span>
-
     </div>
-
   </section>
 
 
   <!-- =====================================================
        RESULT
   ====================================================== -->
-
-  <section
-    id="result"
-    class="result"
-  >
-
-    <div
-      id="resultIcon"
-      class="result-icon"
-    >
+  <section id="result" class="result">
+    <div id="resultIcon" class="result-icon">
       ⏳
     </div>
-
 
     <h2 id="resultTitle">
       MEMPROSES
     </h2>
 
+    <p id="resultMessage" class="result-message"></p>
 
-    <p
-      id="resultMessage"
-      class="result-message"
-    ></p>
-
-
-    <div
-      id="studentId"
-      class="student-id"
-    ></div>
-
+    <div id="studentId" class="student-id"></div>
 
     <div class="buttons">
-
-      <button
-        id="scanAgainButton"
-        type="button"
-      >
+      <button id="scanAgainButton" type="button">
         📷 Scan Lagi
       </button>
-
     </div>
-
   </section>
 
 
   <!-- =====================================================
        SUMMARY
   ====================================================== -->
-
   <section class="summary-grid">
-
     <div class="summary-card">
-
-      <div class="summary-icon">
-        👥
-      </div>
-
-      <div class="summary-label">
-        TOTAL
-      </div>
-
-      <div
-        id="countTotal"
-        class="summary-number"
-      >
-        0
-      </div>
-
+      <div class="summary-icon">👥</div>
+      <div class="summary-label">TOTAL</div>
+      <div id="countTotal" class="summary-number">0</div>
     </div>
 
-
     <div class="summary-card">
-
-      <div class="summary-icon">
-        🟢
-      </div>
-
-      <div class="summary-label">
-        HADIR
-      </div>
-
-      <div
-        id="countPresent"
-        class="summary-number"
-      >
-        0
-      </div>
-
+      <div class="summary-icon">🟢</div>
+      <div class="summary-label">HADIR</div>
+      <div id="countPresent" class="summary-number">0</div>
     </div>
 
-
     <div class="summary-card">
-
-      <div class="summary-icon">
-        🟡
-      </div>
-
-      <div class="summary-label">
-        TERLAMBAT
-      </div>
-
-      <div
-        id="countLate"
-        class="summary-number"
-      >
-        0
-      </div>
-
+      <div class="summary-icon">🟡</div>
+      <div class="summary-label">TERLAMBAT</div>
+      <div id="countLate" class="summary-number">0</div>
     </div>
 
-
     <div class="summary-card">
-
-      <div class="summary-icon">
-        🟠
-      </div>
-
-      <div class="summary-label">
-        SUDAH ABSEN
-      </div>
-
-      <div
-        id="countAlready"
-        class="summary-number"
-      >
-        0
-      </div>
-
+      <div class="summary-icon">🟠</div>
+      <div class="summary-label">SUDAH ABSEN</div>
+      <div id="countAlready" class="summary-number">0</div>
     </div>
-
   </section>
 
 
   <!-- =====================================================
-       DASHBOARD GURU
+       DASHBOARD GURU & ADMIN
   ====================================================== -->
-
-  <section
-    id="dashboard"
-    class="dashboard"
-    style="display:none;"
-  >
-
+  <section id="dashboard" class="dashboard" style="display:none;">
     <div class="dashboard-header">
-
       <div>
-
-        <span class="dashboard-kicker">
-          DASHBOARD GURU
-        </span>
-
-        <h2 id="dashboardTitle">
-          Selamat datang
-        </h2>
-
-        <p id="dashboardUser">
-          -
-        </p>
-
+        <span class="dashboard-kicker">DASHBOARD GURU</span>
+        <h2 id="dashboardTitle">Selamat datang</h2>
+        <p id="dashboardUser">-</p>
       </div>
-      <button
-        id="logoutButton"
-        class="logout-button"
-        type="button"
-      >
+      <button id="logoutButton" class="logout-button" type="button">
         Keluar
       </button>
     </div>
-     
-
 
     <!-- JADWAL -->
-
     <div class="dashboard-section">
-
       <div class="section-title">
-
         <div>
-          <h3>
-            📚 Jadwal Mengajar Hari Ini
-          </h3>
-
-          <p>
-            Pilih mata pelajaran untuk melihat kehadiran siswa.
-          </p>
+          <h3>📚 Jadwal Mengajar Hari Ini</h3>
+          <p>Pilih mata pelajaran untuk melihat kehadiran siswa.</p>
         </div>
-
       </div>
 
-
-      <div
-        id="teacherSchedules"
-        class="schedule-list"
-      >
-
+      <div id="teacherSchedules" class="schedule-list">
         <div class="dashboard-loading">
           ⏳ Memuat jadwal...
         </div>
-
       </div>
-
     </div>
-
 
     <!-- DETAIL ABSENSI -->
-
-    <div
-      id="teacherAttendancePanel"
-      class="dashboard-section"
-      style="display:none;"
-    >
-
+    <div id="teacherAttendancePanel" class="dashboard-section" style="display:none;">
       <div class="attendance-dashboard-header">
-
         <div>
-
-          <span id="teacherScheduleInfo">
-            -
-          </span>
-
-          <h3 id="teacherClassTitle">
-            -
-          </h3>
-
-          <p id="teacherMapelTitle">
-            -
-          </p>
-
+          <span id="teacherScheduleInfo">-</span>
+          <h3 id="teacherClassTitle">-</h3>
+          <p id="teacherMapelTitle">-</p>
         </div>
-
       </div>
 
-
       <!-- STATISTIK -->
-
-      <div
-        id="teacherStats"
-        class="teacher-stats"
-      ></div>
-
+      <div id="teacherStats" class="teacher-stats"></div>
 
       <!-- DAFTAR SISWA -->
-
-      <div
-        id="teacherStudentList"
-        class="teacher-student-list"
-      ></div>
-
+      <div id="teacherStudentList" class="teacher-student-list"></div>
     </div>
-
   </section>
 
 
   <!-- =====================================================
        ATTENDANCE TODAY
   ====================================================== -->
-
   <section class="attendance-section">
-
     <div class="attendance-header">
-
       <div>
-
-        <h3>
-          📋 Urutan Absensi Hari Ini
-        </h3>
-
-        <div
-          id="attendanceDate"
-          class="attendance-date-text"
-        ></div>
-
+        <h3>📋 Urutan Absensi Hari Ini</h3>
+        <div id="attendanceDate" class="attendance-date-text"></div>
       </div>
 
-
       <div class="attendance-tools">
-
-        <select
-          id="attendanceLimit"
-          aria-label="Jumlah siswa yang ditampilkan"
-        >
-
-          <option value="5">
-            5 siswa
-          </option>
-
-          <option
-            value="10"
-            selected
-          >
-            10 siswa
-          </option>
-
-          <option value="25">
-            25 siswa
-          </option>
-
-          <option value="50">
-            50 siswa
-          </option>
-
-          <option value="100">
-            100 siswa
-          </option>
-
-          <option value="150">
-            150 siswa
-          </option>
-
-          <option value="all">
-            Semua
-          </option>
-
+        <select id="attendanceLimit" aria-label="Jumlah siswa yang ditampilkan">
+          <option value="5">5 siswa</option>
+          <option value="10" selected>10 siswa</option>
+          <option value="25">25 siswa</option>
+          <option value="50">50 siswa</option>
+          <option value="100">100 siswa</option>
+          <option value="150">150 siswa</option>
+          <option value="all">Semua</option>
         </select>
 
-
-        <button
-          type="button"
-          onclick="showAllAttendance()"
-        >
+        <button type="button" onclick="showAllAttendance()">
           Tampilkan Semua
         </button>
 
-
         <div class="total-box">
-
-          Total siswa absen:
-
-          <span id="attendanceTotal">
-            0
-          </span>
-
+          Total siswa absen: <span id="attendanceTotal">0</span>
         </div>
-
       </div>
-
     </div>
 
-
-    <div
-      id="attendanceDisplayInfo"
-      class="attendance-info"
-    >
+    <div id="attendanceDisplayInfo" class="attendance-info">
       Memuat data...
     </div>
 
-
-    <div
-      id="attendanceLoading"
-      class="loading"
-    >
+    <div id="attendanceLoading" class="loading">
       ⏳ Memuat data absensi...
     </div>
 
-
-    <div
-      id="attendanceEmpty"
-      class="attendance-info"
-    >
+    <div id="attendanceEmpty" class="attendance-info">
       📭 Belum ada siswa yang melakukan absensi hari ini.
     </div>
 
-
-    <div
-      id="attendanceDesktop"
-      class="attendance-desktop"
-    >
-
+    <div id="attendanceDesktop" class="attendance-desktop">
       <div class="attendance-table-wrapper">
-
         <table class="attendance-table">
-
           <thead>
-
             <tr>
-
-              <th class="rank-column">
-                No
-              </th>
-
-              <th>
-                Nama
-              </th>
-
-              <th>
-                Kelas
-              </th>
-
-              <th>
-                Jam
-              </th>
-
-              <th>
-                Status
-              </th>
-
+              <th class="rank-column">No</th>
+              <th>Nama</th>
+              <th>Kelas</th>
+              <th>Jam</th>
+              <th>Status</th>
             </tr>
-
           </thead>
-
-          <tbody
-            id="attendanceTableBody"
-          ></tbody>
-
+          <tbody id="attendanceTableBody"></tbody>
         </table>
-
       </div>
-
     </div>
 
-
-    <div
-      id="attendanceMobile"
-      class="attendance-mobile"
-    >
-
-      <div
-        id="attendanceCardList"
-        class="attendance-card-list"
-      ></div>
-
+    <div id="attendanceMobile" class="attendance-mobile">
+      <div id="attendanceCardList" class="attendance-card-list"></div>
     </div>
-
   </section>
-
 
 </main>
 
@@ -581,88 +274,29 @@
 <!-- =====================================================
      LOGIN MODAL
 ====================================================== -->
-
-<div
-  id="loginModal"
-  class="login-modal"
-  style="display:none;"
->
-
+<div id="loginModal" class="login-modal" style="display:none;">
   <div class="login-box">
+    <button id="closeLoginButton" class="login-close" type="button">×</button>
 
-    <button
-      id="closeLoginButton"
-      class="login-close"
-      type="button"
-    >
-      ×
-    </button>
+    <div class="login-icon">🔐</div>
 
-
-    <div class="login-icon">
-      🔐
-    </div>
-
-
-    <h2>
-      Login Sistem
-    </h2>
-
-    <p>
-      Guru &amp; Administrator
-    </p>
-
+    <h2>Login Sistem</h2>
+    <p>Guru &amp; Administrator</p>
 
     <form id="loginForm">
+      <label>Username</label>
+      <input type="text" id="loginUsername" autocomplete="username" required>
 
-      <label>
-        Username
-      </label>
+      <label>Password</label>
+      <input type="password" id="loginPassword" autocomplete="current-password" required>
 
-      <input
-        type="text"
-        id="loginUsername"
-        autocomplete="username"
-        required
-      >
+      <div id="loginMessage" class="login-message"></div>
 
-
-      <label>
-        Password
-      </label>
-
-      <input
-        type="password"
-        id="loginPassword"
-        autocomplete="current-password"
-        required
-      >
-
-
-      <div
-        id="loginMessage"
-        class="login-message"
-      ></div>
-
-
-      <button
-        type="submit"
-        class="login-submit"
-      >
-        Masuk
-      </button>
-
+      <button type="submit" class="login-submit">Masuk</button>
     </form>
-
   </div>
-
 </div>
 
-
-<script
-  src="app.js"
-  defer
-></script>
-
+<script src="app.js" defer></script>
 </body>
 </html>
