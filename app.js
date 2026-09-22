@@ -29,7 +29,7 @@
 ============================================================ */
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbyG9NPbVI8JAbh46LecqG3WAOMviBQ7RBG_JNgKTh-N6AQb6aB4lRsZClP5i9oR8d7d/exec';
+  'https://script.google.com/macros/s/AKfycbybMMhzrTv3Uqv3vMAdJTA5Co4FiTh_jZ4ocD5iNdHb2mZBX2S_BJJBrgFCgJIcqb21/exec';
 
 const SESSION_KEY =
   'baitul_ulum_session_token';
@@ -2526,7 +2526,7 @@ async function loadTodaySummary() {
 
     setText(
       'countAlready',
-      result.sudahAbsen ?? 0
+      result.sudahAbsen ?? result.uniqueStudentCount ?? 0
     );
 
 
@@ -2887,8 +2887,8 @@ function renderTodayAttendance() {
     'attendanceDisplayInfo',
 
     limit === 'all'
-      ? `Menampilkan semua ${total} siswa yang telah melakukan absensi.`
-      : `Menampilkan ${visibleData.length} dari ${total} siswa yang telah melakukan absensi.`
+      ? `Menampilkan semua ${total} siswa unik yang telah melakukan absensi.`
+      : `Menampilkan ${visibleData.length} dari ${total} siswa unik yang telah melakukan absensi.`
   );
 
   updateTodayAttendanceLayout();
@@ -11089,125 +11089,1412 @@ window.loadTeacherRecapOptions =
  * END V23 - REKAP GURU BULANAN + EXPORT EXCEL/PDF
  * ======================================================================== */
 
-/* ============================================================
-   V25 - PUSAT KESEHATAN SISTEM / PRODUCTIZATION
-   ADDITIVE ONLY - tidak mengubah index.html / style.css / header
-============================================================ */
-(function(){
+
+/* ========================================================================
+ * V2 - SMART PRODUCT FOUNDATION
+ * Additive only. Tidak mengubah index.html/style.css, header, scanner,
+ * dashboard Guru/Kepala Sekolah, atau alur absensi existing.
+ * ======================================================================== */
+(function () {
+  'use strict';
+  async function v2LoadProductPlanInfo() {
+    try {
+      const result = await apiGet({ action: 'productPlanInfo' });
+      if (!result || !result.success) return null;
+      return result.data || null;
+    } catch (error) {
+      console.warn('V2 product plan info gagal dimuat:', error);
+      return null;
+    }
+  }
+  window.v2LoadProductPlanInfo = v2LoadProductPlanInfo;
+  window.v2SmartProduct = { currentPlan: 'SMART', getInfo: v2LoadProductPlanInfo };
+})();
+
+/* ========================================================================
+ * END V2 - SMART PRODUCT FOUNDATION
+ * ======================================================================== */
+
+/* ========================================================================
+ * V2 SMART PRODUCTIZATION FINAL - FRONTEND HELPER
+ * Additive only. Tidak membuat panel baru di Dashboard Guru/Kepala Sekolah.
+ * ======================================================================== */
+(function () {
   'use strict';
 
-  const PANEL_ID='v25SystemHealthPanel';
-  const STYLE_ID='v25SystemHealthStyle';
-
-  function roleAllowed(){
-    const r=String(currentUser?.role||'').toUpperCase();
-    return r==='ADMIN' || r==='KEPALA_SEKOLAH';
-  }
-
-  function injectStyle(){
-    if(document.getElementById(STYLE_ID)) return;
-    const s=document.createElement('style');
-    s.id=STYLE_ID;
-    s.textContent=`
-      #${PANEL_ID}{margin:18px 0;padding:20px;border:1px solid rgba(100,116,139,.22);border-radius:18px;background:var(--card-bg,#fff);box-shadow:0 8px 28px rgba(15,23,42,.08)}
-      #${PANEL_ID} .v25-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-      #${PANEL_ID} h3{margin:0;font-size:20px}
-      #${PANEL_ID} .v25-sub{margin:5px 0 0;opacity:.72;font-size:13px}
-      #${PANEL_ID} .v25-actions{display:flex;gap:8px;flex-wrap:wrap}
-      #${PANEL_ID} button{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:700}
-      #${PANEL_ID} .v25-primary{background:#2563eb;color:#fff}
-      #${PANEL_ID} .v25-secondary{background:#eef2ff;color:#3730a3}
-      #${PANEL_ID} .v25-summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin:16px 0}
-      #${PANEL_ID} .v25-stat{padding:14px;border-radius:14px;background:rgba(148,163,184,.10)}
-      #${PANEL_ID} .v25-stat strong{display:block;font-size:25px;line-height:1.1}
-      #${PANEL_ID} .v25-stat span{font-size:12px;opacity:.72}
-      #${PANEL_ID} .v25-ok{color:#15803d}.v25-warn{color:#b45309}.v25-error{color:#b91c1c}
-      #${PANEL_ID} .v25-check{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid rgba(148,163,184,.18);font-size:13px}
-      #${PANEL_ID} .v25-check:last-child{border-bottom:0}
-      #${PANEL_ID} .v25-status{font-weight:800;white-space:nowrap}
-      #${PANEL_ID} .v25-detail{opacity:.72;text-align:right}
-      #${PANEL_ID} .v25-loading{padding:15px;text-align:center;opacity:.7}
-      @media(max-width:700px){#${PANEL_ID} .v25-summary{grid-template-columns:repeat(2,1fr)}#${PANEL_ID} .v25-check{display:block}#${PANEL_ID} .v25-detail{text-align:left;margin-top:4px}}
-    `;
-    document.head.appendChild(s);
-  }
-
-  function getDashboard(){ return document.getElementById('dashboard'); }
-
-  function ensurePanel(){
-    if(!roleAllowed()) return null;
-    const dashboard=getDashboard();
-    if(!dashboard) return null;
-    injectStyle();
-    let panel=document.getElementById(PANEL_ID);
-    if(panel) return panel;
-    panel=document.createElement('section');
-    panel.id=PANEL_ID;
-    panel.innerHTML=`
-      <div class="v25-head">
-        <div><h3>🛠️ Pusat Kesehatan Sistem</h3><div class="v25-sub">Pemeriksaan kesiapan sistem absensi, WhatsApp, trigger, Anti-Spam, Queue, dan Alpa otomatis.</div></div>
-        <div class="v25-actions"><button class="v25-primary" id="v25CheckBtn">🔍 Cek Sistem</button></div>
-      </div>
-      <div id="v25HealthBody"><div class="v25-loading">Belum diperiksa.</div></div>`;
-    dashboard.appendChild(panel);
-    panel.querySelector('#v25CheckBtn').addEventListener('click',loadHealth);
-    return panel;
-  }
-
-  function statusClass(status){
-    status=String(status||'').toUpperCase();
-    return status==='OK'?'v25-ok':status==='ERROR'?'v25-error':'v25-warn';
-  }
-
-  async function loadHealth(){
-    const panel=ensurePanel();
-    if(!panel) return;
-    const body=panel.querySelector('#v25HealthBody');
-    const btn=panel.querySelector('#v25CheckBtn');
-    body.innerHTML='<div class="v25-loading">⏳ Memeriksa sistem...</div>';
-    if(btn) btn.disabled=true;
-    try{
-      const result=await apiGet({action:'systemHealthDashboard',token:currentToken||''});
-      if(result && result.sessionExpired){
-        if(typeof window.handleSessionExpired==='function') window.handleSessionExpired();
-        return;
-      }
-      if(!result || result.success===false && !result.summary){
-        throw new Error(result?.message||'Gagal membaca kesehatan sistem.');
-      }
-      const summary=result.summary||{};
-      const checks=Array.isArray(result.checks)?result.checks:[];
-      body.innerHTML=`
-        <div class="v25-summary">
-          <div class="v25-stat"><strong class="v25-ok">${Number(summary.ok||0)}</strong><span>Komponen OK</span></div>
-          <div class="v25-stat"><strong class="v25-warn">${Number(summary.warning||0)}</strong><span>Warning</span></div>
-          <div class="v25-stat"><strong class="v25-error">${Number(summary.error||0)}</strong><span>Error</span></div>
-          <div class="v25-stat"><strong>${Number(summary.missingSheets||0)}</strong><span>Sheet Kurang</span></div>
-        </div>
-        <div>${checks.map(c=>`<div class="v25-check"><div><strong class="${statusClass(c.status)}">${escapeHTML(c.key||'-')}</strong></div><div class="v25-detail">${escapeHTML(c.detail||'')}</div></div>`).join('')}</div>`;
-    }catch(err){
-      body.innerHTML='<div class="v25-loading v25-error">❌ '+escapeHTML(err.message||String(err))+'</div>';
-    }finally{
-      if(btn) btn.disabled=false;
+  async function v2SmartGetProductInfo() {
+    try {
+      const result = await apiGet({ action: 'smartProductInfo' });
+      if (!result || !result.success) return null;
+      return result.data || null;
+    } catch (error) {
+      console.warn('SMART product info gagal dimuat:', error);
+      return null;
     }
   }
 
-  function boot(){
-    if(!roleAllowed()) return;
-    ensurePanel();
+  async function v2SmartGetProductStatus() {
+    try {
+      const token = (typeof currentToken !== 'undefined' ? currentToken : '') || window.currentToken || '';
+      const result = await apiGet({ action: 'smartProductStatus', token: token });
+      if (!result || !result.success) return null;
+      return result.data || null;
+    } catch (error) {
+      console.warn('SMART product status gagal dimuat:', error);
+      return null;
+    }
   }
 
-  window.v25OpenSystemHealth=boot;
-  window.v25LoadSystemHealth=loadHealth;
-
-  const observer=new MutationObserver(function(){
-    if(roleAllowed()) ensurePanel();
+  window.v2SmartGetProductInfo = v2SmartGetProductInfo;
+  window.v2SmartGetProductStatus = v2SmartGetProductStatus;
+  window.v2SmartProduct = Object.assign(window.v2SmartProduct || {}, {
+    currentPlan: 'SMART',
+    version: 'SMART-1.0',
+    getInfo: v2SmartGetProductInfo,
+    getStatus: v2SmartGetProductStatus
   });
-  observer.observe(document.body,{childList:true,subtree:true});
-  setTimeout(boot,700);
-  setTimeout(boot,1800);
 })();
 
-/* ============================================================
-   END V25 - PUSAT KESEHATAN SISTEM
-============================================================ */
+/* ========================================================================
+ * END V2 SMART PRODUCTIZATION FINAL - FRONTEND HELPER
+ * ======================================================================== */
+
+/* ========================================================================
+ * V3 SMART PRODUCTIZATION - SETUP OPERASIONAL / ONBOARDING ADMIN
+ * Hanya tampil untuk ADMIN. Tidak menyentuh Guru/Kepala Sekolah.
+ * ======================================================================== */
+(function () {
+  'use strict';
+
+  const V3_PANEL_ID = 'v3SmartSetupPanel';
+  let v3ObserverStarted = false;
+
+  function v3Role() {
+    try {
+      return String(
+        (typeof currentUser !== 'undefined' && currentUser && currentUser.role) ||
+        (window.currentUser && window.currentUser.role) || ''
+      ).toUpperCase();
+    } catch (e) { return ''; }
+  }
+
+  function v3Token() {
+    try {
+      return (typeof currentToken !== 'undefined' ? currentToken : '') ||
+        window.currentToken || '';
+    } catch (e) { return window.currentToken || ''; }
+  }
+
+  function v3Esc(value) {
+    try { return escapeHTML(String(value == null ? '' : value)); }
+    catch (e) { return String(value == null ? '' : value); }
+  }
+
+  function v3FormatNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toLocaleString('id-ID') : '0';
+  }
+
+  function v3PanelHTML() {
+    return `
+      <section id="${V3_PANEL_ID}" class="v3-smart-setup-panel" style="
+        margin:20px 0;
+        padding:20px;
+        border:1px solid #dbe4ee;
+        border-radius:16px;
+        background:#fff;
+        box-shadow:0 6px 20px rgba(15,23,42,.06);
+      ">
+        <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">
+              SMART PRODUCT • ADMIN
+            </div>
+            <h3 style="margin:4px 0 4px;font-size:20px;">⚙️ Setup Operasional SMART</h3>
+            <div style="font-size:13px;color:#64748b;">
+              Pemeriksaan kesiapan sistem sebelum digunakan sebagai produk sekolah.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="v3SmartSetupCheckBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer;">
+              🔍 Periksa Sistem
+            </button>
+            <button type="button" id="v3SmartSetupVerifyBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#334155;font-weight:700;cursor:pointer;">
+              ✅ Verifikasi
+            </button>
+            <button type="button" id="v3SmartSetupCreateBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#475569;color:#fff;font-weight:700;cursor:pointer;">
+              🧩 Buat Sheet Kurang
+            </button>
+          </div>
+        </div>
+
+        <div id="v3SmartSetupMessage" style="margin-top:14px;font-size:13px;"></div>
+        <div id="v3SmartSetupSummary" style="margin-top:14px;"></div>
+        <div id="v3SmartSetupDetails" style="margin-top:12px;"></div>
+      </section>
+    `;
+  }
+
+  function v3SetMessage(text, type) {
+    const el = document.getElementById('v3SmartSetupMessage');
+    if (!el) return;
+    const color = type === 'error' ? '#b91c1c' : type === 'success' ? '#047857' : '#475569';
+    el.innerHTML = `<div style="color:${color};font-weight:600;">${v3Esc(text)}</div>`;
+  }
+
+  function v3RenderDashboard(result) {
+    const summary = document.getElementById('v3SmartSetupSummary');
+    const details = document.getElementById('v3SmartSetupDetails');
+    if (!summary || !details) return;
+
+    const data = result && result.data ? result.data : {};
+    const wizard = data.wizard && data.wizard.data ? data.wizard.data : null;
+    const sheets = data.checks && data.checks[0] && data.checks[0].data
+      ? data.checks[0].data : {};
+
+    let sheetTotal = 0, sheetReady = 0, sheetRows = 0;
+    Object.keys(sheets).forEach(function(name) {
+      sheetTotal++;
+      if (sheets[name] && sheets[name].exists) {
+        sheetReady++;
+        sheetRows += Number(sheets[name].rows || 0);
+      }
+    });
+
+    const checkOk = (data.checks || []).filter(function(x){ return x.ok; }).length;
+    const checkTotal = (data.checks || []).length;
+    const ready = sheetTotal > 0 && sheetReady === sheetTotal;
+
+    summary.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+        <div style="padding:14px;border-radius:12px;background:#f8fafc;">
+          <div style="font-size:11px;color:#64748b;">PAKET</div>
+          <div style="font-size:18px;font-weight:800;">⭐ SMART</div>
+        </div>
+        <div style="padding:14px;border-radius:12px;background:#f8fafc;">
+          <div style="font-size:11px;color:#64748b;">SHEET</div>
+          <div style="font-size:18px;font-weight:800;">${sheetReady}/${sheetTotal}</div>
+        </div>
+        <div style="padding:14px;border-radius:12px;background:#f8fafc;">
+          <div style="font-size:11px;color:#64748b;">BARIS DATA</div>
+          <div style="font-size:18px;font-weight:800;">${v3FormatNumber(sheetRows)}</div>
+        </div>
+        <div style="padding:14px;border-radius:12px;background:#f8fafc;">
+          <div style="font-size:11px;color:#64748b;">PEMERIKSAAN</div>
+          <div style="font-size:18px;font-weight:800;">${checkOk}/${checkTotal}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:${ready ? '#ecfdf5' : '#fff7ed'};color:${ready ? '#047857' : '#c2410c'};font-weight:700;">
+        ${ready ? '✅ Struktur sheet lengkap.' : '⚠️ Masih ada komponen sheet yang perlu diperiksa.'}
+      </div>
+    `;
+
+    let html = '<div style="font-size:13px;font-weight:800;margin-bottom:8px;">Detail Pemeriksaan</div>';
+    html += '<div style="display:grid;gap:6px;">';
+
+    (data.checks || []).forEach(function(item) {
+      html += `
+        <div style="display:flex;justify-content:space-between;gap:12px;padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;">
+          <span>${v3Esc(item.label)}</span>
+          <strong style="color:${item.ok ? '#047857' : '#b91c1c'};">
+            ${item.ok ? 'OK' : 'GAGAL'}
+          </strong>
+        </div>
+      `;
+    });
+    html += '</div>';
+
+    if (wizard) {
+      html += `<div style="margin-top:10px;font-size:12px;color:#64748b;">Setup Wizard tersedia dan ikut diperiksa.</div>`;
+    }
+
+    details.innerHTML = html;
+  }
+
+  async function v3LoadDashboard() {
+    if (v3Role() !== 'ADMIN') return;
+    v3SetMessage('Sedang memeriksa kesiapan sistem...', 'info');
+    try {
+      const result = await apiGet({
+        action:'smartSetupDashboard',
+        token:v3Token()
+      });
+      if (!result || !result.success) {
+        throw new Error((result && (result.message || result.error)) || 'Pemeriksaan gagal.');
+      }
+      v3RenderDashboard(result);
+      v3SetMessage('Pemeriksaan selesai.', 'success');
+    } catch (error) {
+      console.error('V3 SMART Setup:', error);
+      v3SetMessage(error.message || 'Pemeriksaan gagal.', 'error');
+    }
+  }
+
+  async function v3Verify() {
+    if (v3Role() !== 'ADMIN') return;
+    v3SetMessage('Memverifikasi struktur dan trigger...', 'info');
+    try {
+      const result = await apiGet({
+        action:'smartSetupVerify',
+        token:v3Token()
+      });
+      if (!result || !result.success) {
+        throw new Error((result && (result.message || result.error)) || 'Verifikasi gagal.');
+      }
+      const data = result.data || {};
+      const missingSheets = data.missingSheets || [];
+      const missingTriggers = data.missingRecommendedTriggers || [];
+      const details = document.getElementById('v3SmartSetupDetails');
+      if (details) {
+        details.innerHTML = `
+          <div style="padding:14px;border-radius:12px;background:${data.ready ? '#ecfdf5' : '#fff7ed'};">
+            <strong>${data.ready ? '✅ Struktur siap.' : '⚠️ Struktur belum sepenuhnya siap.'}</strong>
+            <div style="margin-top:8px;font-size:13px;">
+              Sheet kurang: ${missingSheets.length ? v3Esc(missingSheets.join(', ')) : 'tidak ada'}<br>
+              Trigger rekomendasi kurang: ${missingTriggers.length ? v3Esc(missingTriggers.join(', ')) : 'tidak ada'}
+            </div>
+          </div>
+        `;
+      }
+      v3SetMessage('Verifikasi selesai.', 'success');
+    } catch (error) {
+      v3SetMessage(error.message || 'Verifikasi gagal.', 'error');
+    }
+  }
+
+  async function v3CreateMissing() {
+    if (v3Role() !== 'ADMIN') return;
+    if (!confirm('Buat sheet yang belum tersedia sekarang?')) return;
+    v3SetMessage('Membuat sheet yang kurang...', 'info');
+    try {
+      const result = await apiGet({
+        action:'smartSetupCreateMissing',
+        token:v3Token()
+      });
+      if (!result || !result.success) {
+        throw new Error((result && (result.message || result.error)) || 'Pembuatan sheet gagal.');
+      }
+      v3SetMessage('Sheet yang kurang selesai diproses.', 'success');
+      await v3LoadDashboard();
+    } catch (error) {
+      v3SetMessage(error.message || 'Pembuatan sheet gagal.', 'error');
+    }
+  }
+
+  function v3Inject() {
+    if (v3Role() !== 'ADMIN') return false;
+    const dashboard = document.getElementById('dashboard');
+    if (!dashboard) return false;
+    if (document.getElementById(V3_PANEL_ID)) return true;
+
+    const section = document.createElement('div');
+    section.innerHTML = v3PanelHTML();
+    const panel = section.firstElementChild;
+    if (!panel) return false;
+
+    dashboard.appendChild(panel);
+
+    const checkBtn = document.getElementById('v3SmartSetupCheckBtn');
+    const verifyBtn = document.getElementById('v3SmartSetupVerifyBtn');
+    const createBtn = document.getElementById('v3SmartSetupCreateBtn');
+
+    if (checkBtn) checkBtn.addEventListener('click', v3LoadDashboard);
+    if (verifyBtn) verifyBtn.addEventListener('click', v3Verify);
+    if (createBtn) createBtn.addEventListener('click', v3CreateMissing);
+
+    setTimeout(v3LoadDashboard, 150);
+    return true;
+  }
+
+  function v3RemoveIfNotAdmin() {
+    if (v3Role() !== 'ADMIN') {
+      const old = document.getElementById(V3_PANEL_ID);
+      if (old) old.remove();
+    }
+  }
+
+  function v3StartObserver() {
+    if (v3ObserverStarted) return;
+    v3ObserverStarted = true;
+
+    const tryInject = function() {
+      v3RemoveIfNotAdmin();
+      v3Inject();
+    };
+
+    tryInject();
+
+    const observer = new MutationObserver(function() {
+      tryInject();
+    });
+
+    observer.observe(document.body, { childList:true, subtree:true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', v3StartObserver, { once:true });
+  } else {
+    v3StartObserver();
+  }
+
+  window.v3SmartSetup = {
+    version:'SMART-1.1',
+    refresh:v3LoadDashboard,
+    verify:v3Verify
+  };
+})();
+
+/* ========================================================================
+ * END V3 SMART PRODUCTIZATION - SETUP OPERASIONAL / ONBOARDING ADMIN
+ * ======================================================================== */
+
+
+/* ========================================================================
+ * V4 SMART PRODUCTIZATION - PROFIL & KONFIGURASI SEKOLAH
+ * ------------------------------------------------------------------------
+ * Hanya ADMIN. Tidak tampil di Guru/Kepala Sekolah.
+ * ======================================================================== */
+(function () {
+  'use strict';
+
+  const V4_PANEL_ID = 'v4SmartSchoolProfilePanel';
+  let v4ObserverStarted = false;
+
+  function v4Role() {
+    try {
+      return String(
+        (typeof currentUser !== 'undefined' && currentUser && currentUser.role) ||
+        (window.currentUser && window.currentUser.role) || ''
+      ).toUpperCase();
+    } catch (e) { return ''; }
+  }
+
+  function v4Token() {
+    try {
+      return (typeof currentToken !== 'undefined' ? currentToken : '') ||
+        window.currentToken || '';
+    } catch (e) { return window.currentToken || ''; }
+  }
+
+  function v4Esc(value) {
+    try { return escapeHTML(String(value == null ? '' : value)); }
+    catch (e) { return String(value == null ? '' : value); }
+  }
+
+  function v4Val(id) {
+    const el = document.getElementById(id);
+    return el ? String(el.value || '').trim() : '';
+  }
+
+  function v4SetVal(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value == null ? '' : value;
+  }
+
+  function v4PanelHTML() {
+    return `
+      <section id="${V4_PANEL_ID}" style="
+        margin:20px 0;
+        padding:20px;
+        border:1px solid #dbe4ee;
+        border-radius:16px;
+        background:#fff;
+        box-shadow:0 6px 20px rgba(15,23,42,.06);
+      ">
+        <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">
+              SMART PRODUCT • ADMIN
+            </div>
+            <h3 style="margin:4px 0;font-size:20px;">🏫 Profil & Konfigurasi Sekolah</h3>
+            <div style="font-size:13px;color:#64748b;">
+              Identitas sekolah untuk fondasi branding, laporan, onboarding, dan pengembangan produk SMART.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" id="v4SmartProfileSetupBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#334155;font-weight:700;cursor:pointer;">
+              🧩 Siapkan Profil
+            </button>
+            <button type="button" id="v4SmartProfileLoadBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer;">
+              🔄 Muat Data
+            </button>
+            <button type="button" id="v4SmartProfileSaveBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#475569;color:#fff;font-weight:700;cursor:pointer;">
+              💾 Simpan Profil
+            </button>
+          </div>
+        </div>
+
+        <div id="v4SmartProfileMessage" style="margin-top:14px;font-size:13px;"></div>
+
+        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+          ${v4Input('v4NamaSekolah','Nama Sekolah *','namaSekolah','text')}
+          ${v4Input('v4Npsn','NPSN','npsn','text')}
+          ${v4Select('v4Jenjang','Jenjang','jenjang',['','SD','SMP','SMA','SMK','MTs','MA'])}
+          ${v4Select('v4StatusSekolah','Status Sekolah','statusSekolah',['AKTIF','NONAKTIF'])}
+          ${v4Input('v4Alamat','Alamat','alamat','text')}
+          ${v4Input('v4Desa','Desa/Kelurahan','desa','text')}
+          ${v4Input('v4Kecamatan','Kecamatan','kecamatan','text')}
+          ${v4Input('v4Kabupaten','Kabupaten/Kota','kabupatenKota','text')}
+          ${v4Input('v4Provinsi','Provinsi','provinsi','text')}
+          ${v4Input('v4KodePos','Kode Pos','kodePos','text')}
+          ${v4Input('v4Telepon','Telepon','telepon','text')}
+          ${v4Input('v4Email','Email','email','email')}
+          ${v4Input('v4Website','Website','website','url')}
+          ${v4Input('v4Kepala','Nama Kepala Sekolah','namaKepalaSekolah','text')}
+          ${v4Input('v4WaAdmin','No. WhatsApp Admin','noWaAdmin','text')}
+          ${v4Input('v4Logo','URL Logo Sekolah','logoUrl','url')}
+          ${v4Input('v4TahunAjaran','Tahun Ajaran','tahunAjaran','text')}
+          ${v4Select('v4Timezone','Timezone','timezone',['Asia/Jakarta','Asia/Makassar','Asia/Jayapura'])}
+        </div>
+
+        <div id="v4SmartProfilePreview" style="margin-top:14px;"></div>
+      </section>
+    `;
+  }
+
+  function v4Input(id, label, key, type) {
+    return `<label style="display:block;font-size:12px;font-weight:700;color:#475569;">
+      ${v4Esc(label)}
+      <input id="${id}" data-v4-key="${v4Esc(key)}" type="${type || 'text'}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px 11px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#0f172a;">
+    </label>`;
+  }
+
+  function v4Select(id, label, key, options) {
+    return `<label style="display:block;font-size:12px;font-weight:700;color:#475569;">
+      ${v4Esc(label)}
+      <select id="${id}" data-v4-key="${v4Esc(key)}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px 11px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#0f172a;">
+        ${options.map(function(x){ return `<option value="${v4Esc(x)}">${v4Esc(x || 'Pilih')}</option>`; }).join('')}
+      </select>
+    </label>`;
+  }
+
+  function v4SetMessage(text, type) {
+    const el = document.getElementById('v4SmartProfileMessage');
+    if (!el) return;
+    const color = type === 'error' ? '#b91c1c' : type === 'success' ? '#047857' : '#475569';
+    el.innerHTML = `<div style="color:${color};font-weight:600;">${v4Esc(text)}</div>`;
+  }
+
+  function v4ReadForm() {
+    const data = {};
+    document.querySelectorAll('#' + V4_PANEL_ID + ' [data-v4-key]').forEach(function(el) {
+      data[el.getAttribute('data-v4-key')] = String(el.value || '').trim();
+    });
+    return data;
+  }
+
+  function v4Render(profile) {
+    profile = profile || {};
+    v4SetVal('v4NamaSekolah', profile.namaSekolah);
+    v4SetVal('v4Npsn', profile.npsn);
+    v4SetVal('v4Jenjang', profile.jenjang);
+    v4SetVal('v4StatusSekolah', profile.statusSekolah || 'AKTIF');
+    v4SetVal('v4Alamat', profile.alamat);
+    v4SetVal('v4Desa', profile.desa);
+    v4SetVal('v4Kecamatan', profile.kecamatan);
+    v4SetVal('v4Kabupaten', profile.kabupatenKota);
+    v4SetVal('v4Provinsi', profile.provinsi);
+    v4SetVal('v4KodePos', profile.kodePos);
+    v4SetVal('v4Telepon', profile.telepon);
+    v4SetVal('v4Email', profile.email);
+    v4SetVal('v4Website', profile.website);
+    v4SetVal('v4Kepala', profile.namaKepalaSekolah);
+    v4SetVal('v4WaAdmin', profile.noWaAdmin);
+    v4SetVal('v4Logo', profile.logoUrl);
+    v4SetVal('v4TahunAjaran', profile.tahunAjaran);
+    v4SetVal('v4Timezone', profile.timezone || 'Asia/Jakarta');
+
+    const preview = document.getElementById('v4SmartProfilePreview');
+    if (preview) {
+      const name = profile.namaSekolah || 'Nama sekolah belum diisi';
+      const loc = [profile.kabupatenKota, profile.provinsi].filter(Boolean).join(', ');
+      preview.innerHTML = `
+        <div style="padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700;">Preview Identitas</div>
+          <div style="font-size:18px;font-weight:800;margin-top:3px;">${v4Esc(name)}</div>
+          <div style="font-size:13px;color:#64748b;margin-top:3px;">${v4Esc(loc || 'Lokasi belum diisi')}</div>
+          <div style="font-size:12px;color:#64748b;margin-top:7px;">NPSN: ${v4Esc(profile.npsn || '-')} • Jenjang: ${v4Esc(profile.jenjang || '-')} • TA: ${v4Esc(profile.tahunAjaran || '-')}</div>
+        </div>`;
+    }
+  }
+
+  async function v4Load() {
+    if (v4Role() !== 'ADMIN') return;
+    v4SetMessage('Memuat profil sekolah...', 'info');
+    try {
+      const result = await apiGet({ action:'smartSchoolProfile', token:v4Token() });
+      if (!result || !result.success) throw new Error((result && (result.message || result.error)) || 'Profil gagal dimuat.');
+      v4Render(result.data && result.data.profile ? result.data.profile : {});
+      v4SetMessage('Profil sekolah berhasil dimuat.', 'success');
+    } catch (error) {
+      console.error('V4 SMART Profil:', error);
+      v4SetMessage(error.message || 'Profil gagal dimuat.', 'error');
+    }
+  }
+
+  async function v4Setup() {
+    if (v4Role() !== 'ADMIN') return;
+    v4SetMessage('Menyiapkan sheet profil sekolah...', 'info');
+    try {
+      const result = await apiGet({ action:'smartSchoolProfileSetup', token:v4Token() });
+      if (!result || !result.success) throw new Error((result && (result.message || result.error)) || 'Setup profil gagal.');
+      v4Render(result.data && result.data.profile ? result.data.profile : {});
+      v4SetMessage('Profil sekolah siap digunakan.', 'success');
+    } catch (error) {
+      v4SetMessage(error.message || 'Setup profil gagal.', 'error');
+    }
+  }
+
+  async function v4Save() {
+    if (v4Role() !== 'ADMIN') return;
+    const payload = v4ReadForm();
+    if (!payload.namaSekolah) {
+      v4SetMessage('Nama Sekolah wajib diisi.', 'error');
+      const el = document.getElementById('v4NamaSekolah');
+      if (el) el.focus();
+      return;
+    }
+    v4SetMessage('Menyimpan profil sekolah...', 'info');
+    try {
+      const result = await apiGet({
+        action:'smartSchoolProfileSave',
+        token:v4Token(),
+        payload:JSON.stringify(payload)
+      });
+      if (!result || !result.success) throw new Error((result && (result.message || result.error)) || 'Profil gagal disimpan.');
+      v4Render(result.data && result.data.profile ? result.data.profile : payload);
+      v4SetMessage('Profil sekolah berhasil disimpan.', 'success');
+    } catch (error) {
+      console.error('V4 SMART Profil Save:', error);
+      v4SetMessage(error.message || 'Profil gagal disimpan.', 'error');
+    }
+  }
+
+  function v4Inject() {
+    if (v4Role() !== 'ADMIN') return false;
+    const dashboard = document.getElementById('dashboard');
+    if (!dashboard) return false;
+    if (document.getElementById(V4_PANEL_ID)) return true;
+
+    const section = document.createElement('div');
+    section.innerHTML = v4PanelHTML();
+    const panel = section.firstElementChild;
+    if (!panel) return false;
+    dashboard.appendChild(panel);
+
+    const setupBtn = document.getElementById('v4SmartProfileSetupBtn');
+    const loadBtn = document.getElementById('v4SmartProfileLoadBtn');
+    const saveBtn = document.getElementById('v4SmartProfileSaveBtn');
+    if (setupBtn) setupBtn.addEventListener('click', v4Setup);
+    if (loadBtn) loadBtn.addEventListener('click', v4Load);
+    if (saveBtn) saveBtn.addEventListener('click', v4Save);
+
+    setTimeout(v4Load, 150);
+    return true;
+  }
+
+  function v4RemoveIfNotAdmin() {
+    if (v4Role() !== 'ADMIN') {
+      const old = document.getElementById(V4_PANEL_ID);
+      if (old) old.remove();
+    }
+  }
+
+  function v4StartObserver() {
+    if (v4ObserverStarted) return;
+    v4ObserverStarted = true;
+    const tryInject = function() {
+      v4RemoveIfNotAdmin();
+      v4Inject();
+    };
+    tryInject();
+    const observer = new MutationObserver(function() { tryInject(); });
+    observer.observe(document.body, { childList:true, subtree:true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', v4StartObserver, { once:true });
+  } else {
+    v4StartObserver();
+  }
+
+  window.v4SmartSchoolProfile = {
+    version:'SMART-1.3',
+    refresh:v4Load,
+    setup:v4Setup,
+    save:v4Save
+  };
+})();
+
+/* ========================================================================
+ * END V4 SMART PRODUCTIZATION - PROFIL & KONFIGURASI SEKOLAH
+ * ======================================================================== */
+
+
+/* ========================================================================
+ * V5.1 SMART PRODUCTIZATION - IMPORT DATA SEKOLAH
+ * Admin-only additive module. CSV / TSV / Excel copy-paste workflow.
+ * ======================================================================== */
+(function(){
+  'use strict';
+  const V5_PANEL_ID = 'v5SmartImportPanel';
+  const V5_ENTITY_CONFIG = {
+    SISWA:{label:'👨‍🎓 Siswa', key:'STUDENT_ID', headers:['STUDENT_ID','NIPD','NISN','NAMA','JK','TEMPAT_LAHIR','TANGGAL_LAHIR','KELAS_ID','KELAS','JENJANG','TAHUN_MASUK','NO_WA_ORANG_TUA','NAMA_ORANG_TUA','STATUS']},
+    GURU:{label:'👨‍🏫 Guru', key:'GURU_ID', headers:['GURU_ID','NIP','NAMA_GURU','JENIS_KELAMIN','NO_WA','STATUS']},
+    KELAS:{label:'🏫 Kelas', key:'KELAS_ID', headers:['KELAS_ID','NAMA_KELAS','TINGKAT','JURUSAN','WALI_KELAS_ID','STATUS']},
+    MAPEL:{label:'📚 Mata Pelajaran', key:'MAPEL_ID', headers:['MAPEL_ID','NAMA_MAPEL','JENJANG','KELOMPOK','STATUS']}
+  };
+  let v5ObserverStarted = false;
+  let v5Rows = [];
+  let v5FileName = '';
+
+  function v5Role(){ return (typeof currentUser!=='undefined' && currentUser ? currentUser.role : '') || (window.currentUser && window.currentUser.role) || ''; }
+  function v5Token(){ return (typeof currentToken!=='undefined' ? currentToken : '') || window.currentToken || ''; }
+  function v5Esc(v){ return (typeof escapeHTML==='function' ? escapeHTML(v) : String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];})); }
+  function v5SetMsg(t,type){ const el=document.getElementById('v5SmartImportMessage'); if(!el)return; el.textContent=t; el.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569'; }
+  function v5Config(){ return V5_ENTITY_CONFIG[document.getElementById('v5ImportEntity')?.value || 'SISWA']; }
+
+  function v5ParseCSV(text){
+    const rows=[]; let row=[]; let cell=''; let quote=false;
+    for(let i=0;i<text.length;i++){
+      const c=text[i], n=text[i+1];
+      if(c==='"'){
+        if(quote && n==='"'){ cell+='"'; i++; }
+        else quote=!quote;
+      } else if(c===',' && !quote){ row.push(cell); cell=''; }
+      else if((c==='\n'||c==='\r') && !quote){
+        if(c==='\r' && n==='\n') i++;
+        row.push(cell); cell='';
+        if(row.some(function(x){return String(x).trim()!=='';})) rows.push(row);
+        row=[];
+      } else cell+=c;
+    }
+    row.push(cell);
+    if(row.some(function(x){return String(x).trim()!=='';})) rows.push(row);
+    if(!rows.length) return [];
+    const headers=rows[0].map(function(h){return String(h).trim().replace(/^\uFEFF/,'');});
+    return rows.slice(1).map(function(r){ const o={}; headers.forEach(function(h,i){o[h]=String(r[i]??'').trim();}); return o; });
+  }
+
+  function v5ParseTSV(text){
+    const lines=text.split(/\r?\n/).filter(function(x){return x.trim()!=='';});
+    if(!lines.length)return [];
+    const headers=lines[0].split('\t').map(function(x){return x.trim().replace(/^\uFEFF/,'');});
+    return lines.slice(1).map(function(line){const vals=line.split('\t'); const o={}; headers.forEach(function(h,i){o[h]=String(vals[i]??'').trim();}); return o;});
+  }
+
+  function v5ReadFile(file){
+    return new Promise(function(resolve,reject){
+      const reader=new FileReader();
+      reader.onload=function(){
+        try{
+          const text=String(reader.result||'');
+          const name=String(file.name||'').toLowerCase();
+          const rows=(name.endsWith('.tsv')||text.indexOf('\t')>=0) ? v5ParseTSV(text) : v5ParseCSV(text);
+          resolve(rows);
+        }catch(e){reject(e);}
+      };
+      reader.onerror=function(){reject(new Error('File tidak dapat dibaca.'));};
+      reader.readAsText(file,'UTF-8');
+    });
+  }
+
+  function v5NormalizeKey(k){ return String(k||'').trim().toUpperCase().replace(/[\s-]+/g,'_'); }
+  function v5NormalizeRows(rows){
+    const cfg=v5Config();
+    const allowed={}; cfg.headers.forEach(function(h){allowed[v5NormalizeKey(h)]=h;});
+    const result=[]; const duplicate={}; let emptyRows=0;
+    rows.forEach(function(raw){
+      const o={}; Object.keys(raw||{}).forEach(function(k){const nk=v5NormalizeKey(k); if(allowed[nk]) o[allowed[nk]]=String(raw[k]??'').trim();});
+      if(!Object.keys(o).some(function(k){return o[k]!=='';})){emptyRows++;return;}
+      if(!o[cfg.key]) o[cfg.key]='';
+      const key=String(o[cfg.key]||'').trim();
+      if(key){ if(duplicate[key]) o.__duplicate=true; duplicate[key]=true; }
+      result.push(o);
+    });
+    return {rows:result,emptyRows:emptyRows};
+  }
+
+  function v5RenderPreview(){
+    const box=document.getElementById('v5SmartImportPreview'); if(!box)return;
+    const cfg=v5Config();
+    if(!v5Rows.length){box.innerHTML='<div style="color:#64748b;">Belum ada data. Pilih CSV/TSV atau paste data dari Excel.</div>';return;}
+    const sample=v5Rows.slice(0,8);
+    let html='<div style="font-weight:800;margin-bottom:8px;">Preview '+v5Rows.length+' baris</div><div style="overflow:auto;max-height:320px;border:1px solid #e2e8f0;border-radius:10px;"><table style="border-collapse:collapse;width:100%;font-size:12px;"><thead><tr>';
+    cfg.headers.forEach(function(h){html+='<th style="position:sticky;top:0;background:#f8fafc;padding:8px;border-bottom:1px solid #e2e8f0;text-align:left;white-space:nowrap;">'+v5Esc(h)+'</th>';});
+    html+='</tr></thead><tbody>';
+    sample.forEach(function(r){html+='<tr>';cfg.headers.forEach(function(h){html+='<td style="padding:7px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">'+v5Esc(r[h]||'')+'</td>';});html+='</tr>';});
+    html+='</tbody></table></div>';
+    if(v5Rows.length>8) html+='<div style="margin-top:6px;font-size:12px;color:#64748b;">Menampilkan 8 baris pertama.</div>';
+    box.innerHTML=html;
+  }
+
+  function v5DownloadTemplate(){
+    const cfg=v5Config();
+    const sample={SISWA:['','12345','001122','Contoh Siswa','L','Bogor','2010-01-01','','XI TJKT 1','SMP','2026','','Orang Tua','AKTIF'],GURU:['','198001010001','Contoh Guru','L','62812xxxxxxxx','AKTIF'],KELAS:['','XI TJKT 1','XI','TJKT','','AKTIF'],MAPEL:['','Informatika','SMP','Umum','AKTIF']}[document.getElementById('v5ImportEntity').value];
+    const line=cfg.headers.map(function(h,i){return '"'+String(sample[i]??'').replace(/"/g,'""')+'"';}).join(',');
+    const blob=new Blob([cfg.headers.join(',')+'\n'+line+'\n'],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='Template_'+document.getElementById('v5ImportEntity').value+'_SMART.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+
+  async function v5LoadStatus(){
+    try{
+      const r=await apiGet({action:'smartImportStatus',token:v5Token()});
+      if(!r||!r.success)throw new Error(r?.message||'Gagal membaca status import.');
+      const el=document.getElementById('v5SmartImportStatus'); if(!el)return;
+      const entities=r.data?.entities||{}; let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">';
+      Object.keys(V5_ENTITY_CONFIG).forEach(function(k){const x=entities[k]||{};html+='<div style="padding:10px;border-radius:10px;background:#f8fafc;"><div style="font-size:11px;color:#64748b;">'+v5Esc(V5_ENTITY_CONFIG[k].label)+'</div><strong>'+v5Esc(x.exists?'SIAP':'BELUM ADA')+'</strong><div style="font-size:11px;color:#64748b;">'+Number(x.rows||0).toLocaleString('id-ID')+' data</div></div>';});
+      html+='</div>'; el.innerHTML=html;
+    }catch(e){v5SetMsg(e.message||'Gagal membaca status.','error');}
+  }
+
+  async function v5Import(){
+    if(v5Role()!=='ADMIN')return;
+    if(!v5Rows.length){v5SetMsg('Belum ada data untuk diimport.','error');return;}
+    const cfg=v5Config();
+    const normalized=v5NormalizeRows(v5Rows);
+    v5Rows=normalized.rows;
+    const missing=v5Rows.filter(function(r){return !r[cfg.key];}).length;
+    if(missing){
+      if(!confirm('Ada '+missing+' baris tanpa '+cfg.key+'. Sistem akan membuat ID otomatis untuk baris tersebut. Lanjutkan?')) return;
+    }
+    if(v5Rows.some(function(r){return r.__duplicate;})){v5SetMsg('Ada duplikat '+cfg.key+' dalam data. Perbaiki sebelum import.','error');return;}
+    if(!confirm('Import '+v5Rows.length+' baris ke '+cfg.label+'? Data dengan ID yang sudah ada akan diperbarui (upsert).'))return;
+    const btn=document.getElementById('v5SmartImportBtn'); if(btn)btn.disabled=true;
+    let inserted=0,updated=0,skipped=0,errors=0; const err=[];
+    try{
+      for(let i=0;i<v5Rows.length;i+=15){
+        const chunk=v5Rows.slice(i,i+15).map(function(r){const x=Object.assign({},r);delete x.__duplicate;return x;});
+        const r=await apiGet({action:'smartImportData',token:v5Token(),entity:document.getElementById('v5ImportEntity').value,payload:JSON.stringify({rows:chunk})});
+        if(!r||!r.success)throw new Error(r?.message||'Import batch gagal pada '+(i+1));
+        const d=r.data||{}; inserted+=Number(d.inserted||0);updated+=Number(d.updated||0);skipped+=Number(d.skipped||0);errors+=Number(d.errors||0);(d.errorMessages||[]).forEach(function(x){err.push(x);});
+        v5SetMsg('Memproses '+Math.min(i+15,v5Rows.length)+' / '+v5Rows.length+' baris...','info');
+      }
+      v5SetMsg('Import selesai: '+inserted+' baru, '+updated+' diperbarui, '+skipped+' dilewati, '+errors+' error.','success');
+      const result=document.getElementById('v5SmartImportResult'); if(result)result.innerHTML='<div style="padding:12px;border-radius:10px;background:'+(errors?'#fff7ed':'#ecfdf5')+';"><strong>Hasil Import</strong><br>➕ Baru: '+inserted+'<br>🔄 Diperbarui: '+updated+'<br>⏭️ Dilewati: '+skipped+'<br>❌ Error: '+errors+(err.length?'<br><small>'+v5Esc(err.slice(0,10).join(' | '))+'</small>':'')+'</div>';
+      await v5LoadStatus();
+    }catch(e){console.error('V5 SMART Import:',e);v5SetMsg(e.message||'Import gagal.','error');}
+    finally{if(btn)btn.disabled=false;}
+  }
+
+  function v5PanelHTML(){return `
+    <section id="${V5_PANEL_ID}" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        <div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">📥 Import Data Sekolah</h3><div style="font-size:13px;color:#64748b;">Import master data secara bertahap. CSV/TSV aman, ID yang sama akan diperbarui.</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" id="v5SmartImportStatusBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;">🔍 Cek Data</button><button type="button" id="v5SmartTemplateBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer;">⬇️ Template</button></div>
+      </div>
+      <div style="margin-top:14px;display:grid;grid-template-columns:minmax(180px,260px) 1fr;gap:10px;align-items:end;">
+        <label style="font-size:12px;font-weight:700;color:#334155;">Jenis Data<select id="v5ImportEntity" style="display:block;width:100%;margin-top:5px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"><option value="SISWA">👨‍🎓 Siswa</option><option value="GURU">👨‍🏫 Guru</option><option value="KELAS">🏫 Kelas</option><option value="MAPEL">📚 Mata Pelajaran</option></select></label>
+        <label style="font-size:12px;font-weight:700;color:#334155;">File CSV/TSV<input id="v5SmartImportFile" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" style="display:block;width:100%;margin-top:5px;padding:7px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;"></label>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#64748b;">💡 Jika data berasal dari Excel, simpan sebagai <b>CSV UTF-8</b>, atau copy-paste tabel Excel ke kotak di bawah.</div>
+      <textarea id="v5SmartImportPaste" placeholder="Paste data Excel/TSV di sini, termasuk baris header..." style="width:100%;min-height:110px;margin-top:10px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box;font:12px monospace;"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><button type="button" id="v5SmartPreviewBtn" style="padding:9px 13px;border:1px solid #0f766e;border-radius:9px;background:#fff;color:#0f766e;font-weight:700;cursor:pointer;">👁️ Preview</button><button type="button" id="v5SmartImportBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer;">📥 Import Sekarang</button></div>
+      <div id="v5SmartImportMessage" style="margin-top:12px;font-size:13px;font-weight:600;"></div><div id="v5SmartImportPreview" style="margin-top:12px;"><div style="color:#64748b;">Belum ada data.</div></div><div id="v5SmartImportResult" style="margin-top:12px;"></div><div style="margin-top:14px;font-weight:800;font-size:13px;">Status Master Data</div><div id="v5SmartImportStatus" style="margin-top:8px;"></div>
+    </section>`;}
+
+  function v5Bind(){
+    const entity=document.getElementById('v5ImportEntity');
+    const file=document.getElementById('v5SmartImportFile');
+    const paste=document.getElementById('v5SmartImportPaste');
+    if(entity)entity.addEventListener('change',function(){v5Rows=[];v5RenderPreview();});
+    if(file)file.addEventListener('change',async function(){const f=file.files?.[0];if(!f)return;v5FileName=f.name;try{v5Rows=await v5ReadFile(f);v5SetMsg('File '+f.name+' terbaca: '+v5Rows.length+' baris.','success');v5RenderPreview();}catch(e){v5SetMsg(e.message||'Gagal membaca file.','error');}});
+    const preview=document.getElementById('v5SmartPreviewBtn'); if(preview)preview.addEventListener('click',function(){if(paste&&paste.value.trim()){const text=paste.value;v5Rows=text.indexOf('\t')>=0?v5ParseTSV(text):v5ParseCSV(text);v5SetMsg('Data paste terbaca: '+v5Rows.length+' baris.','success');}v5RenderPreview();});
+    const imp=document.getElementById('v5SmartImportBtn'); if(imp)imp.addEventListener('click',v5Import);
+    const stat=document.getElementById('v5SmartImportStatusBtn'); if(stat)stat.addEventListener('click',v5LoadStatus);
+    const tpl=document.getElementById('v5SmartTemplateBtn'); if(tpl)tpl.addEventListener('click',v5DownloadTemplate);
+    v5LoadStatus();
+  }
+
+  function v5Inject(){
+    if(v5Role()!=='ADMIN')return false;
+    const dashboard=document.getElementById('dashboard'); if(!dashboard)return false;
+    if(document.getElementById(V5_PANEL_ID))return true;
+    const wrap=document.createElement('div');wrap.innerHTML=v5PanelHTML();const panel=wrap.firstElementChild;if(!panel)return false;dashboard.appendChild(panel);v5Bind();return true;
+  }
+  function v5Remove(){if(v5Role()!=='ADMIN'){const x=document.getElementById(V5_PANEL_ID);if(x)x.remove();}}
+  function v5Start(){if(v5ObserverStarted)return;v5ObserverStarted=true;const run=function(){v5Remove();v5Inject();};run();const ob=new MutationObserver(run);ob.observe(document.body,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',v5Start,{once:true});else v5Start();
+  window.v5SmartImport={version:'SMART-1.4',refresh:v5LoadStatus};
+})();
+
+/* ========================================================================
+ * END V5.1 SMART PRODUCTIZATION - IMPORT DATA SEKOLAH
+ * ======================================================================== */
+
+
+/* ========================================================================
+ * V6 SMART PRODUCTIZATION - SETUP MASTER DATA
+ * + V5.2 SISWA.JENJANG FIX
+ * Admin-only additive module.
+ * ======================================================================== */
+(function(){
+  'use strict';
+  const V6_PANEL_ID='v6SmartMasterPanel';
+  let v6Started=false;
+  let v6LastValidation=null;
+
+  function v6Role(){return (typeof currentUser!=='undefined'&&currentUser?currentUser.role:'')||(window.currentUser&&window.currentUser.role)||'';}
+  function v6Token(){return (typeof currentToken!=='undefined'?currentToken:'')||window.currentToken||'';}
+  function v6Esc(v){return (typeof escapeHTML==='function'?escapeHTML(v):String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];}));}
+  function v6Msg(text,type){
+    const el=document.getElementById('v6SmartMasterMessage'); if(!el)return;
+    el.textContent=text;
+    el.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';
+  }
+
+  async function v6Status(){
+    try{
+      const r=await apiGet({action:'smartMasterSetupStatus',token:v6Token()});
+      if(!r||!r.success)throw new Error(r?.message||'Gagal membaca status master data.');
+      const d=r.data||{}, entities=d.entities||{};
+      const order=['SISWA','GURU','KELAS','MAPEL'];
+      let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;">';
+      order.forEach(function(k){
+        const x=entities[k]||{};
+        const ok=x.exists&&x.valid;
+        html+='<div style="padding:11px;border:1px solid '+(ok?'#bbf7d0':'#fed7aa')+';border-radius:10px;background:'+(ok?'#f0fdf4':'#fff7ed')+';">'+
+          '<div style="font-size:11px;color:#64748b;">'+v6Esc(k)+'</div>'+
+          '<strong style="color:'+(ok?'#166534':'#9a3412')+';">'+(ok?'✅ SIAP':'⚠️ PERLU CEK')+'</strong>'+
+          '<div style="font-size:11px;color:#64748b;">'+Number(x.rows||0).toLocaleString('id-ID')+' data</div>'+
+          (x.missingHeaders&&x.missingHeaders.length?'<div style="font-size:10px;color:#b91c1c;margin-top:4px;">Kurang: '+v6Esc(x.missingHeaders.join(', '))+'</div>':'')+
+          '</div>';
+      });
+      html+='</div>';
+      if(d.legacySiswaHeader){
+        html+='<div style="margin-top:10px;padding:10px;border-radius:10px;background:#fff7ed;color:#9a3412;font-size:12px;"><b>⚠️ SISWA masih memakai header JENIS_KELAMIN lama.</b> Gunakan tombol Perbaiki SISWA di bawah.</div>';
+      } else {
+        html+='<div style="margin-top:10px;padding:10px;border-radius:10px;background:#f0fdf4;color:#166534;font-size:12px;"><b>✅ Mapping SISWA:</b> JK = jenis kelamin, JENJANG = jenjang pendidikan.</div>';
+      }
+      document.getElementById('v6SmartMasterStatus').innerHTML=html;
+    }catch(e){v6Msg(e.message||'Gagal membaca status.','error');}
+  }
+
+  async function v6Repair(){
+    if(v6Role()!=='ADMIN')return;
+    if(!confirm('Perbaiki struktur SISWA sekarang? Kolom JENIS_KELAMIN lama akan menjadi JENJANG dan nilai L/P lama akan diperbaiki berdasarkan profil/kelas jika dapat ditentukan.'))return;
+    try{
+      const r=await apiGet({action:'smartSiswaRepairV52',token:v6Token()});
+      if(!r||!r.success)throw new Error(r?.message||'Perbaikan SISWA gagal.');
+      const d=r;
+      v6Msg('Perbaikan SISWA selesai. '+Number(d.updatedValues||0)+' nilai diperbaiki.','success');
+      await v6Status();
+    }catch(e){v6Msg(e.message||'Perbaikan gagal.','error');}
+  }
+
+  async function v6Validate(){
+    if(v6Role()!=='ADMIN')return;
+    try{
+      v6Msg('Memvalidasi relasi master data...','info');
+      const r=await apiGet({action:'smartMasterValidate',token:v6Token()});
+      if(!r||!r.success)throw new Error(r?.message||'Validasi gagal.');
+      const d=r.data||{};
+      v6LastValidation=d;
+      const c=d.counts||{};
+      const ok=d.status==='SIAP';
+      let html='<div style="margin-top:10px;padding:12px;border-radius:10px;background:'+(ok?'#ecfdf5':'#fff7ed')+';color:'+(ok?'#166534':'#9a3412')+';">'+
+        '<b>'+(ok?'✅ MASTER DATA SIAP':'⚠️ MASTER DATA PERLU PERBAIKAN')+'</b>'+
+        '<div style="margin-top:6px;font-size:12px;">Siswa tanpa kelas: '+Number(c.siswaClassMissing||0)+
+        ' · Nama kelas tidak cocok: '+Number(c.siswaClassNameMismatch||0)+
+        ' · Wali guru tidak ditemukan: '+Number(c.waliGuruMissing||0)+
+        ' · Jadwal-Guru: '+Number(c.jadwalGuruMissing||0)+
+        ' · Jadwal-Kelas: '+Number(c.jadwalKelasMissing||0)+
+        ' · Jadwal-Mapel: '+Number(c.jadwalMapelMissing||0)+
+        ' · Mapel tanpa jenjang: '+Number(c.mapelJenjangEmpty||0)+'</div></div>';
+      if(d.issues&&d.issues.length){
+        html+='<div style="margin-top:8px;max-height:220px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="padding:7px;text-align:left;background:#f8fafc;">Jenis</th><th style="padding:7px;text-align:left;background:#f8fafc;">ID</th><th style="padding:7px;text-align:left;background:#f8fafc;">Keterangan</th></tr></thead><tbody>';
+        d.issues.slice(0,50).forEach(function(x){
+          html+='<tr><td style="padding:6px;border-top:1px solid #f1f5f9;">'+v6Esc(x.type)+'</td><td style="padding:6px;border-top:1px solid #f1f5f9;">'+v6Esc(x.id)+'</td><td style="padding:6px;border-top:1px solid #f1f5f9;">'+v6Esc(x.message)+'</td></tr>';
+        });
+        html+='</tbody></table></div>';
+      }
+      document.getElementById('v6SmartMasterValidation').innerHTML=html;
+      v6Msg('Validasi master data selesai.','success');
+    }catch(e){v6Msg(e.message||'Validasi gagal.','error');}
+  }
+
+  function v6PanelHTML(){return `
+    <section id="${V6_PANEL_ID}" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div>
+          <h3 style="margin:4px 0;font-size:20px;">🧩 Setup Master Data SMART</h3>
+          <div style="font-size:13px;color:#64748b;">Cek hubungan Siswa, Guru, Kelas, Mata Pelajaran, dan Jadwal sebelum sekolah baru digunakan.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" id="v6SmartMasterStatusBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;">🔍 Cek Master</button>
+          <button type="button" id="v6SmartMasterValidateBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer;">✅ Validasi Relasi</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:11px;border-radius:10px;background:#f8fafc;font-size:12px;color:#475569;">
+        <b>V5.2 Fix:</b> Kolom SISWA menggunakan <b>JK</b> untuk jenis kelamin dan <b>JENJANG</b> untuk jenjang pendidikan.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button type="button" id="v6SmartMasterRepairBtn" style="padding:9px 13px;border:1px solid #f59e0b;border-radius:9px;background:#fff7ed;color:#9a3412;font-weight:800;cursor:pointer;">🔧 Perbaiki SISWA</button>
+      </div>
+      <div id="v6SmartMasterMessage" style="margin-top:12px;font-size:13px;font-weight:600;"></div>
+      <div style="margin-top:14px;font-weight:800;font-size:13px;">Status Master Data</div>
+      <div id="v6SmartMasterStatus" style="margin-top:8px;"></div>
+      <div style="margin-top:14px;font-weight:800;font-size:13px;">Hasil Validasi Relasi</div>
+      <div id="v6SmartMasterValidation" style="margin-top:8px;"><div style="color:#64748b;">Belum divalidasi.</div></div>
+    </section>`;}
+
+  function v6Bind(){
+    const s=document.getElementById('v6SmartMasterStatusBtn');if(s)s.addEventListener('click',v6Status);
+    const v=document.getElementById('v6SmartMasterValidateBtn');if(v)v.addEventListener('click',v6Validate);
+    const r=document.getElementById('v6SmartMasterRepairBtn');if(r)r.addEventListener('click',v6Repair);
+    v6Status();
+  }
+
+  function v6Inject(){
+    if(v6Role()!=='ADMIN')return false;
+    const dashboard=document.getElementById('dashboard');if(!dashboard)return false;
+    if(document.getElementById(V6_PANEL_ID))return true;
+    const wrap=document.createElement('div');wrap.innerHTML=v6PanelHTML();const panel=wrap.firstElementChild;if(!panel)return false;
+    dashboard.appendChild(panel);v6Bind();return true;
+  }
+
+  function v6Remove(){
+    if(v6Role()!=='ADMIN'){
+      const x=document.getElementById(V6_PANEL_ID);if(x)x.remove();
+    }
+  }
+
+  function v6Start(){
+    if(v6Started)return;v6Started=true;
+    const run=function(){v6Remove();v6Inject();};
+    run();
+    const ob=new MutationObserver(run);ob.observe(document.body,{childList:true,subtree:true});
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',v6Start,{once:true});else v6Start();
+
+  window.v6SmartMaster={
+    version:'SMART-1.6',
+    refresh:v6Status,
+    validate:v6Validate,
+    repairSiswa:v6Repair
+  };
+})();
+
+/* ========================================================================
+ * END V6 SMART PRODUCTIZATION - SETUP MASTER DATA + V5.2 JENJANG FIX
+ * ======================================================================== */
+
+/* ========================================================================
+ * V7 SMART PRODUCTIZATION - SETUP JADWAL
+ * Admin-only additive module.
+ * ======================================================================== */
+(function(){
+  'use strict';
+  const V7_PANEL_ID='v7SmartSchedulePanel';
+  let v7Started=false;
+
+  function v7Role(){return (typeof currentUser!=='undefined'&&currentUser?currentUser.role:'')||(window.currentUser&&window.currentUser.role)||'';}
+  function v7Token(){return (typeof currentToken!=='undefined'?currentToken:'')||window.currentToken||'';}
+  function v7Esc(v){return (typeof escapeHTML==='function'?escapeHTML(v):String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];}));}
+  function v7Msg(t,type){const e=document.getElementById('v7SmartScheduleMessage');if(!e)return;e.textContent=t;e.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';}
+  function v7Input(){return document.getElementById('v7SmartSchedulePaste');}
+  function v71File(){return document.getElementById('v7SmartScheduleFile');}
+  function v71ReadFile(){const f=v71File()?.files?.[0];if(!f){v7Msg('Pilih file CSV/TSV terlebih dahulu.','error');return;} const reader=new FileReader(); reader.onload=function(e){const text=String(e.target.result||'');const input=v7Input();if(input)input.value=text;v7Preview();v7Msg('File '+f.name+' berhasil dimuat. Silakan cek Preview sebelum import.','success');}; reader.onerror=function(){v7Msg('File tidak dapat dibaca.','error');}; reader.readAsText(f,'UTF-8');}
+  function v7RowsFromText(text){
+    text=String(text||'').trim();
+    if(!text)return [];
+    const lines=text.split(/\r?\n/).filter(x=>x.trim());
+    if(!lines.length)return [];
+    const delim=lines[0].indexOf('\t')>=0?'\t':',';
+    const headers=lines[0].split(delim).map(x=>x.trim().replace(/^"|"$/g,''));
+    return lines.slice(1).map(function(line){
+      const cells=[];let cur='',quote=false;
+      for(let i=0;i<line.length;i++){
+        const ch=line[i];
+        if(ch==='"'){if(quote&&line[i+1]==='"'){cur+='"';i++;}else quote=!quote;}
+        else if(ch===delim&&!quote){cells.push(cur);cur='';}
+        else cur+=ch;
+      }
+      cells.push(cur);
+      const obj={};headers.forEach((h,i)=>obj[h]=String(cells[i]??'').trim());return obj;
+    });
+  }
+  function v7Payload(){return JSON.stringify({rows:v7RowsFromText(v7Input()?.value||'')});}
+
+  async function v7Setup(){
+    try{
+      const r=await apiGet({action:'smartScheduleSetup',token:v7Token()});
+      if(!r?.success)throw new Error(r?.message||'Gagal membaca setup jadwal.');
+      const d=r.data||{};
+      const status=document.getElementById('v7SmartScheduleStatus');
+      if(status)status.innerHTML='<div style="padding:10px;border-radius:10px;background:'+(d.ready?'#f0fdf4':'#fff7ed')+';color:'+(d.ready?'#166534':'#9a3412')+';"><b>'+(d.ready?'✅ JADWAL SIAP':'⚠️ JADWAL PERLU CEK')+'</b><div style="font-size:12px;margin-top:4px;">'+Number(d.rows||0).toLocaleString('id-ID')+' data · '+v7Esc((d.missingHeaders||[]).length?'Kurang: '+d.missingHeaders.join(', '):'Struktur header lengkap')+'</div></div>';
+    }catch(e){v7Msg(e.message||'Gagal membaca setup.','error');}
+  }
+
+  async function v7Validate(){
+    try{
+      v7Msg('Memvalidasi JADWAL...','info');
+      const r=await apiGet({action:'smartScheduleValidate',token:v7Token()});
+      if(!r?.success)throw new Error(r?.message||'Validasi JADWAL gagal.');
+      const d=r.data||{},c=d.counts||{};
+      let h='<div style="padding:11px;border-radius:10px;background:'+(d.status==='SIAP'?'#ecfdf5':'#fff7ed')+';color:'+(d.status==='SIAP'?'#166534':'#9a3412')+';"><b>'+(d.status==='SIAP'?'✅ JADWAL SIAP':'⚠️ JADWAL PERLU PERBAIKAN')+'</b><div style="font-size:12px;margin-top:5px;">Total: '+Number(c.total||0)+' · Valid: '+Number(c.valid||0)+' · Invalid: '+Number(c.invalid||0)+' · Kelas tidak ditemukan: '+Number(c.kelasMissing||0)+' · Guru: '+Number(c.guruMissing||0)+' · Mapel: '+Number(c.mapelMissing||0)+' · Jam: '+Number(c.timeInvalid||0)+' · Bentrok kelas: '+Number(c.classConflict||0)+' · Bentrok guru: '+Number(c.teacherConflict||0)+'</div></div>';
+      if(d.issues?.length){h+='<div style="margin-top:8px;max-height:220px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr><th style="padding:6px;text-align:left;background:#f8fafc;">Baris</th><th style="padding:6px;text-align:left;background:#f8fafc;">JADWAL_ID</th><th style="padding:6px;text-align:left;background:#f8fafc;">Keterangan</th></tr></thead><tbody>';d.issues.slice(0,50).forEach(x=>h+='<tr><td style="padding:6px;border-top:1px solid #f1f5f9;">'+v7Esc(x.row)+'</td><td style="padding:6px;border-top:1px solid #f1f5f9;">'+v7Esc(x.id)+'</td><td style="padding:6px;border-top:1px solid #f1f5f9;">'+v7Esc(x.message)+'</td></tr>');h+='</tbody></table></div>'}
+      document.getElementById('v7SmartScheduleValidation').innerHTML=h;v7Msg('Validasi JADWAL selesai.','success');
+    }catch(e){v7Msg(e.message||'Validasi gagal.','error');}
+  }
+
+  function v7Preview(){
+    const rows=v7RowsFromText(v7Input()?.value||'');
+    const el=document.getElementById('v7SmartSchedulePreview');
+    if(!rows.length){el.innerHTML='<div style="color:#64748b;">Belum ada data untuk preview.</div>';return;}
+    const headers=['JADWAL_ID','HARI','JAM_KE','JAM_MULAI','JAM_SELESAI','KELAS_ID','KELAS','MAPEL_ID','MAPEL','GURU_ID','GURU','STATUS'];
+    let h='<div style="font-weight:800;margin-bottom:7px;">Preview '+rows.length+' baris</div><div style="overflow:auto;border:1px solid #e2e8f0;border-radius:10px;"><table style="border-collapse:collapse;min-width:100%;font-size:11px;"><thead><tr>';headers.forEach(x=>h+='<th style="padding:7px;text-align:left;background:#f8fafc;white-space:nowrap;">'+v7Esc(x)+'</th>');h+='</tr></thead><tbody>';rows.slice(0,15).forEach(r=>{h+='<tr>';headers.forEach(x=>h+='<td style="padding:7px;border-top:1px solid #f1f5f9;white-space:nowrap;">'+v7Esc(r[x])+'</td>');h+='</tr>'});h+='</tbody></table></div>';el.innerHTML=h;
+  }
+
+  async function v7Import(){
+    const rows=v7RowsFromText(v7Input()?.value||'');
+    if(!rows.length){v7Msg('Tidak ada data jadwal untuk diimport.','error');return;}
+    if(rows.length>15){v7Msg('Maksimal 15 jadwal per import. Pecah menjadi beberapa batch.','error');return;}
+    if(!confirm('Import '+rows.length+' jadwal sekarang? Data akan divalidasi terlebih dahulu dan import dibatalkan jika ada bentrok/error.'))return;
+    try{
+      v7Msg('Memvalidasi dan mengimport JADWAL...','info');
+      const r=await apiGet({action:'smartScheduleImport',token:v7Token(),payload:v7Payload()});
+      if(!r?.success)throw new Error(r?.message||'Import JADWAL gagal.');
+      const d=r.data||{};v7Msg('Import berhasil. Baru: '+Number(d.inserted||0)+' · Diperbarui: '+Number(d.updated||0)+' · Error: '+Number(d.errors||0),'success');
+      await v7Setup();await v7Validate();
+    }catch(e){v7Msg(e.message||'Import gagal.','error');}
+  }
+
+  async function v7Repair(){
+    if(!confirm('Normalisasi data JADWAL sekarang? Sistem akan merapikan HARI, JAM_MULAI, JAM_SELESAI, dan STATUS tanpa mengubah relasi ID.'))return;
+    try{v7Msg('Memperbaiki format JADWAL...','info');const r=await apiGet({action:'smartScheduleRepair',token:v7Token()});if(!r?.success)throw new Error(r?.message||'Perbaikan gagal.');v7Msg('Perbaikan JADWAL selesai. '+Number(r.data?.updatedValues||0)+' nilai dinormalisasi.','success');await v7Setup();await v7Validate();}catch(e){v7Msg(e.message||'Perbaikan gagal.','error');}
+  }
+
+  function v7Template(){
+    const h='JADWAL_ID,HARI,JAM_KE,JAM_MULAI,JAM_SELESAI,KELAS_ID,KELAS,MAPEL_ID,MAPEL,GURU_ID,GURU,STATUS\n,JUMAT,1,07:30,08:15,KLS001,XI TJKT 1,MPL001,Informatika,GRU001,Nama Guru,AKTIF';
+    const blob=new Blob([h],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Template_JADWAL_SMART.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }
+
+  function v7PanelHTML(){return `
+<section id="${V7_PANEL_ID}" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);">
+<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">📅 Setup Jadwal SMART</h3><div style="font-size:13px;color:#64748b;">Validasi dan import jadwal setelah master Siswa, Guru, Kelas, dan Mata Pelajaran siap.</div></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" id="v7SmartScheduleSetupBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;">🔍 Cek Jadwal</button><button type="button" id="v7SmartScheduleValidateBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer;">✅ Validasi Jadwal</button></div></div>
+<div style="margin-top:12px;padding:11px;border-radius:10px;background:#f8fafc;font-size:12px;color:#475569;"><b>Aturan:</b> HARI + JAM_KE + KELAS_ID tidak boleh bentrok, HARI + JAM_KE + GURU_ID tidak boleh bentrok, dan KELAS/GURU/MAPEL harus sudah ada di master.</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><label for="v7SmartScheduleFile" style="padding:9px 13px;border:1px solid #0f766e;border-radius:9px;background:#fff;color:#0f766e;font-weight:800;cursor:pointer;display:inline-block;">🔎 TELUSURI</label><input id="v7SmartScheduleFile" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain" style="display:none;"><button type="button" id="v7SmartScheduleLoadFileBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:800;cursor:pointer;">📂 Muat File</button><button type="button" id="v7SmartScheduleTemplateBtn" style="padding:9px 13px;border:1px solid #0f766e;border-radius:9px;background:#fff;color:#0f766e;font-weight:800;cursor:pointer;">⬇️ Template JADWAL</button><button type="button" id="v7SmartSchedulePreviewBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:800;cursor:pointer;">👁️ Preview</button><button type="button" id="v7SmartScheduleImportBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">📥 Import JADWAL</button><button type="button" id="v7SmartScheduleRepairBtn" style="padding:9px 13px;border:1px solid #f59e0b;border-radius:9px;background:#fff7ed;color:#9a3412;font-weight:800;cursor:pointer;">🔧 Normalisasi</button></div>
+<div style="margin-top:8px;font-size:12px;color:#64748b;">Format yang didukung untuk tombol Telusuri: <b>CSV/TSV/TXT UTF-8</b>. File Excel XLSX tetap dapat digunakan dengan copy-paste tabel ke kotak di bawah.</div><textarea id="v7SmartSchedulePaste" style="width:100%;min-height:150px;margin-top:10px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;font-family:monospace;font-size:11px;box-sizing:border-box;" placeholder="Paste data Excel/CSV/TSV di sini, termasuk header..."></textarea>
+<div id="v7SmartScheduleMessage" style="margin-top:10px;font-size:13px;font-weight:600;"></div>
+<div style="margin-top:12px;font-weight:800;font-size:13px;">Status JADWAL</div><div id="v7SmartScheduleStatus" style="margin-top:8px;"></div>
+<div style="margin-top:12px;font-weight:800;font-size:13px;">Preview Import</div><div id="v7SmartSchedulePreview" style="margin-top:8px;"><div style="color:#64748b;">Belum ada preview.</div></div>
+<div style="margin-top:12px;font-weight:800;font-size:13px;">Hasil Validasi</div><div id="v7SmartScheduleValidation" style="margin-top:8px;"><div style="color:#64748b;">Belum divalidasi.</div></div>
+</section>`;}
+
+  function v7Bind(){
+    document.getElementById('v7SmartScheduleSetupBtn')?.addEventListener('click',v7Setup);
+    document.getElementById('v7SmartScheduleValidateBtn')?.addEventListener('click',v7Validate);
+    document.getElementById('v7SmartScheduleTemplateBtn')?.addEventListener('click',v7Template);
+    document.getElementById('v7SmartScheduleLoadFileBtn')?.addEventListener('click',v71ReadFile);
+    document.getElementById('v7SmartScheduleFile')?.addEventListener('change',v71ReadFile);
+    document.getElementById('v7SmartSchedulePreviewBtn')?.addEventListener('click',v7Preview);
+    document.getElementById('v7SmartScheduleImportBtn')?.addEventListener('click',v7Import);
+    document.getElementById('v7SmartScheduleRepairBtn')?.addEventListener('click',v7Repair);
+    v7Setup();
+  }
+  function v7Inject(){if(v7Role()!=='ADMIN')return false;const dashboard=document.getElementById('dashboard');if(!dashboard)return false;if(document.getElementById(V7_PANEL_ID))return true;const w=document.createElement('div');w.innerHTML=v7PanelHTML();const p=w.firstElementChild;if(!p)return false;dashboard.appendChild(p);v7Bind();return true;}
+  function v7Remove(){if(v7Role()!=='ADMIN'){document.getElementById(V7_PANEL_ID)?.remove();}}
+  function v7Start(){if(v7Started)return;v7Started=true;const run=()=>{v7Remove();v7Inject();};run();new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',v7Start,{once:true});else v7Start();
+  window.v7SmartSchedule={version:'SMART-1.7.1',refresh:v7Setup,validate:v7Validate,preview:v7Preview,import:v7Import,repair:v7Repair};
+})();
+
+/* ========================================================================
+ * END V7 SMART PRODUCTIZATION - SETUP JADWAL
+ * ======================================================================== */
+
+
+/* V7.1 SMART PRODUCTIZATION - JADWAL VALIDATION + FILE BROWSER FIX */
+
+
+
+/* ========================================================================
+ * V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
+ * ------------------------------------------------------------------------
+ * Panel ADMIN only. Tidak mengubah index.html/style.css.
+ * ======================================================================== */
+(function(){
+  'use strict';
+  const V8_PANEL_ID='v8SmartNewSchoolWizardPanel';
+  let started=false;
+
+  function role(){return String((typeof currentUser!=='undefined'&&currentUser?.role)||window.currentUser?.role||'').toUpperCase();}
+  function token(){return (typeof currentToken!=='undefined'&&currentToken)||window.currentToken||'';}
+  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));}
+  function msg(text,type){const el=document.getElementById('v8SmartWizardMessage');if(!el)return;el.textContent=text||'';el.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';}
+
+  function stepButton(id){
+    const map={
+      PROFILE:'v4SmartSchoolProfilePanel',
+      SISWA:'v5SmartImportPanel',
+      GURU:'v5SmartImportPanel',
+      KELAS:'v5SmartImportPanel',
+      MAPEL:'v5SmartImportPanel',
+      JADWAL:'v7SmartSchedulePanel',
+      VALIDATION:'v6SmartMasterPanel'
+    };
+    const target=map[id];
+    if(target){const el=document.getElementById(target);if(el){el.scrollIntoView({behavior:'smooth',block:'start'});return;}}
+    const dashboard=document.getElementById('dashboard');dashboard?.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function render(data){
+    const box=document.getElementById('v8SmartWizardContent'); if(!box)return;
+    const pct=Number(data.progress||0);
+    const color=pct===100?'#16a34a':pct>=70?'#0f766e':'#f59e0b';
+    let html='';
+    html+='<div style="margin-top:12px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">';
+    html+='<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><b>Progress onboarding</b><b>'+pct+'%</b></div>';
+    html+='<div style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px;"><div style="width:'+Math.max(0,Math.min(100,pct))+'%;height:100%;background:'+color+';transition:width .25s;"></div></div>';
+    html+='<div style="margin-top:8px;font-size:12px;color:#64748b;">'+Number(data.readyCount||0)+' dari '+Number(data.totalSteps||0)+' tahap siap.</div></div>';
+
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px;">';
+    (data.steps||[]).forEach(function(s){
+      const ok=!!s.ready;
+      html+='<div style="border:1px solid '+(ok?'#bbf7d0':'#fde68a')+';background:'+(ok?'#f0fdf4':'#fffbeb')+';border-radius:12px;padding:12px;">';
+      html+='<div style="font-weight:800;">'+(ok?'✅':'⚠️')+' '+esc(s.title)+'</div>';
+      html+='<div style="font-size:12px;color:#64748b;margin-top:4px;">'+esc(s.count||'')+'</div>';
+      html+='<div style="font-size:12px;margin-top:7px;line-height:1.45;">'+esc(s.detail||'')+'</div>';
+      if(!ok) html+='<button type="button" data-v8-step="'+esc(s.id)+'" style="margin-top:9px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-weight:700;cursor:pointer;">Buka Tahap</button>';
+      html+='</div>';
+    });
+    html+='</div>';
+
+    if(data.ready){
+      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#ecfdf5;color:#065f46;font-weight:800;">🎉 Checklist dasar sekolah baru sudah lengkap. Sistem siap masuk tahap pilot/operasional.</div>';
+    }else if(data.next){
+      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#fff7ed;color:#9a3412;"><b>➡️ Tahap berikutnya:</b> '+esc(data.next.title)+'<br><span style="font-size:12px;">'+esc(data.next.detail||'')+'</span></div>';
+    }
+
+    if(data.details?.jadwal?.issues?.length){
+      html+='<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;">Lihat masalah jadwal (maks. 20)</summary><div style="overflow:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Baris</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">ID</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Keterangan</th></tr></thead><tbody>';
+      data.details.jadwal.issues.forEach(function(x){html+='<tr><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.row)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.id)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.message)+'</td></tr>';});
+      html+='</tbody></table></div></details>';
+    }
+    box.innerHTML=html;
+    box.querySelectorAll('[data-v8-step]').forEach(function(btn){btn.addEventListener('click',function(){stepButton(btn.getAttribute('data-v8-step'));});});
+  }
+
+  async function check(){
+    if(role()!=='ADMIN')return;
+    try{
+      msg('Memeriksa kesiapan sekolah baru...','info');
+      const r=await apiGet({action:'smartNewSchoolWizard',token:token()});
+      if(!r?.success)throw new Error(r?.message||'Pemeriksaan gagal.');
+      render(r.data||{});
+      msg('Pemeriksaan onboarding selesai.','success');
+    }catch(e){msg(e.message||'Pemeriksaan gagal.','error');}
+  }
+
+  function html(){return `
+<section id="${V8_PANEL_ID}" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);">
+<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">🧭 Wizard Sekolah Baru</h3><div style="font-size:13px;color:#64748b;">Satu halaman untuk memeriksa kesiapan Profil, Master Data, Jadwal, dan validasi sebelum sistem dipakai di sekolah baru.</div></div><button type="button" id="v8SmartWizardCheckBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">🔍 Cek Kesiapan Sekolah</button></div>
+<div style="margin-top:10px;padding:11px;border-radius:10px;background:#f8fafc;color:#475569;font-size:12px;">Wizard ini <b>tidak mengubah data</b>. Fungsinya hanya membaca kondisi sistem dan mengarahkan ADMIN ke tahap yang masih perlu diselesaikan.</div>
+<div id="v8SmartWizardMessage" style="margin-top:10px;font-size:13px;font-weight:700;"></div>
+<div id="v8SmartWizardContent" style="margin-top:10px;"><div style="color:#64748b;">Klik <b>🔍 Cek Kesiapan Sekolah</b> untuk memulai.</div></div>
+</section>`;}
+
+  function inject(){
+    if(role()!=='ADMIN')return false;
+    const dash=document.getElementById('dashboard'); if(!dash)return false;
+    if(document.getElementById(V8_PANEL_ID))return true;
+    const wrap=document.createElement('div');wrap.innerHTML=html();const panel=wrap.firstElementChild;if(!panel)return false;
+    dash.appendChild(panel);
+    document.getElementById('v8SmartWizardCheckBtn')?.addEventListener('click',check);
+    check();
+    return true;
+  }
+  function remove(){if(role()!=='ADMIN')document.getElementById(V8_PANEL_ID)?.remove();}
+  function start(){if(started)return;started=true;const run=()=>{remove();inject();};run();new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+  window.v8SmartNewSchoolWizard={version:'SMART-1.8.2',refresh:check};
+})();
+
+/* ========================================================================
+ * END V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
+ * ======================================================================== */
+
+
+/* ========================================================================
+ * V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
+ * ------------------------------------------------------------------------
+ * Panel ADMIN only. Tidak mengubah index.html/style.css.
+ * ======================================================================== */
+(function(){
+  'use strict';
+  const V8_PANEL_ID='v8SmartNewSchoolWizardPanel';
+  let started=false;
+
+  function role(){return String((typeof currentUser!=='undefined'&&currentUser?.role)||window.currentUser?.role||'').toUpperCase();}
+  function token(){return (typeof currentToken!=='undefined'&&currentToken)||window.currentToken||'';}
+  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));}
+  function msg(text,type){const el=document.getElementById('v8SmartWizardMessage');if(!el)return;el.textContent=text||'';el.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';}
+
+  function stepButton(id){
+    const map={
+      PROFILE:'v4SmartSchoolProfilePanel',
+      SISWA:'v5SmartImportPanel',
+      GURU:'v5SmartImportPanel',
+      KELAS:'v5SmartImportPanel',
+      MAPEL:'v5SmartImportPanel',
+      JADWAL:'v7SmartSchedulePanel',
+      VALIDATION:'v6SmartMasterPanel'
+    };
+    const target=map[id];
+    if(target){const el=document.getElementById(target);if(el){el.scrollIntoView({behavior:'smooth',block:'start'});return;}}
+    const dashboard=document.getElementById('dashboard');dashboard?.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function render(data){
+    const box=document.getElementById('v8SmartWizardContent'); if(!box)return;
+    const pct=Number(data.progress||0);
+    const color=pct===100?'#16a34a':pct>=70?'#0f766e':'#f59e0b';
+    let html='';
+    html+='<div style="margin-top:12px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">';
+    html+='<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><b>Progress onboarding</b><b>'+pct+'%</b></div>';
+    html+='<div style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px;"><div style="width:'+Math.max(0,Math.min(100,pct))+'%;height:100%;background:'+color+';transition:width .25s;"></div></div>';
+    html+='<div style="margin-top:8px;font-size:12px;color:#64748b;">'+Number(data.readyCount||0)+' dari '+Number(data.totalSteps||0)+' tahap siap.</div></div>';
+
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px;">';
+    (data.steps||[]).forEach(function(s){
+      const ok=!!s.ready;
+      html+='<div style="border:1px solid '+(ok?'#bbf7d0':'#fde68a')+';background:'+(ok?'#f0fdf4':'#fffbeb')+';border-radius:12px;padding:12px;">';
+      html+='<div style="font-weight:800;">'+(ok?'✅':'⚠️')+' '+esc(s.title)+'</div>';
+      html+='<div style="font-size:12px;color:#64748b;margin-top:4px;">'+esc(s.count||'')+'</div>';
+      html+='<div style="font-size:12px;margin-top:7px;line-height:1.45;">'+esc(s.detail||'')+'</div>';
+      if(!ok) html+='<button type="button" data-v8-step="'+esc(s.id)+'" style="margin-top:9px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-weight:700;cursor:pointer;">Buka Tahap</button>';
+      html+='</div>';
+    });
+    html+='</div>';
+
+    if(data.ready){
+      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#ecfdf5;color:#065f46;font-weight:800;">🎉 Checklist dasar sekolah baru sudah lengkap. Sistem siap masuk tahap pilot/operasional.</div>';
+    }else if(data.next){
+      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#fff7ed;color:#9a3412;"><b>➡️ Tahap berikutnya:</b> '+esc(data.next.title)+'<br><span style="font-size:12px;">'+esc(data.next.detail||'')+'</span></div>';
+    }
+
+    if(data.details?.jadwal?.issues?.length){
+      html+='<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;">Lihat masalah jadwal (maks. 20)</summary><div style="overflow:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Baris</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">ID</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Keterangan</th></tr></thead><tbody>';
+      data.details.jadwal.issues.forEach(function(x){html+='<tr><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.row)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.id)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.message)+'</td></tr>';});
+      html+='</tbody></table></div></details>';
+    }
+    box.innerHTML=html;
+    box.querySelectorAll('[data-v8-step]').forEach(function(btn){btn.addEventListener('click',function(){stepButton(btn.getAttribute('data-v8-step'));});});
+  }
+
+  async function check(){
+    if(role()!=='ADMIN')return;
+    try{
+      msg('Memeriksa kesiapan sekolah baru...','info');
+      const r=await apiGet({action:'smartNewSchoolWizard',token:token()});
+      if(!r?.success)throw new Error(r?.message||'Pemeriksaan gagal.');
+      render(r.data||{});
+      msg('Pemeriksaan onboarding selesai.','success');
+    }catch(e){msg(e.message||'Pemeriksaan gagal.','error');}
+  }
+
+  function html(){return `
+<section id="${V8_PANEL_ID}" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);">
+<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">🧭 Wizard Sekolah Baru</h3><div style="font-size:13px;color:#64748b;">Satu halaman untuk memeriksa kesiapan Profil, Master Data, Jadwal, dan validasi sebelum sistem dipakai di sekolah baru.</div></div><button type="button" id="v8SmartWizardCheckBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">🔍 Cek Kesiapan Sekolah</button></div>
+<div style="margin-top:10px;padding:11px;border-radius:10px;background:#f8fafc;color:#475569;font-size:12px;">Wizard ini <b>tidak mengubah data</b>. Fungsinya hanya membaca kondisi sistem dan mengarahkan ADMIN ke tahap yang masih perlu diselesaikan.</div>
+<div id="v8SmartWizardMessage" style="margin-top:10px;font-size:13px;font-weight:700;"></div>
+<div id="v8SmartWizardContent" style="margin-top:10px;"><div style="color:#64748b;">Klik <b>🔍 Cek Kesiapan Sekolah</b> untuk memulai.</div></div>
+</section>`;}
+
+  function inject(){
+    if(role()!=='ADMIN')return false;
+    const dash=document.getElementById('dashboard'); if(!dash)return false;
+    if(document.getElementById(V8_PANEL_ID))return true;
+    const wrap=document.createElement('div');wrap.innerHTML=html();const panel=wrap.firstElementChild;if(!panel)return false;
+    dash.appendChild(panel);
+    document.getElementById('v8SmartWizardCheckBtn')?.addEventListener('click',check);
+    check();
+    return true;
+  }
+  function remove(){if(role()!=='ADMIN')document.getElementById(V8_PANEL_ID)?.remove();}
+  function start(){if(started)return;started=true;const run=()=>{remove();inject();};run();new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+  window.v8SmartNewSchoolWizard={version:'SMART-1.8.2',refresh:check};
+})();
+
+/* ========================================================================
+ * END V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
+ * ======================================================================== */
+
+
+/* ========================================================================
+ * V9 SMART PRODUCTIZATION - PILOT SCHOOL CONTROL CENTER
+ * ------------------------------------------------------------------------
+ * ADMIN ONLY. Tidak mengubah index.html/style.css.
+ * Pilot bersifat monitoring, tidak membuat absensi test/palsu.
+ * ======================================================================== */
+(function(){
+  'use strict';
+  const PANEL_ID='v9SmartPilotPanel';
+  let started=false;
+  function role(){return String((typeof currentUser!=='undefined'&&currentUser?.role)||window.currentUser?.role||'').toUpperCase();}
+  function token(){return (typeof currentToken!=='undefined'&&currentToken)||window.currentToken||'';}
+  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));}
+  function msg(t,type){const e=document.getElementById('v9PilotMsg');if(!e)return;e.textContent=t||'';e.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';}
+  function btn(id,fn){document.getElementById(id)?.addEventListener('click',fn);}
+  async function api(action,extra){return await apiGet(Object.assign({action:action,token:token()},extra||{}));}
+  function card(title,value,sub){return '<div style="padding:12px;border:1px solid #dbe4ee;border-radius:12px;background:#fff;"><div style="font-size:11px;color:#64748b;font-weight:700;">'+esc(title)+'</div><div style="font-size:21px;font-weight:900;margin-top:4px;">'+esc(value)+'</div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+esc(sub||'')+'</div></div>';}
+  function render(d){
+    const box=document.getElementById('v9PilotContent');if(!box)return;
+    let h='';
+    const a=d.activePilot;
+    if(a){
+      h+='<div style="padding:14px;border-radius:12px;background:#ecfdf5;border:1px solid #bbf7d0;"><b>🟢 Pilot AKTIF</b><div style="font-size:13px;margin-top:5px;">'+esc(a.school)+' · '+esc(a.start)+' s/d '+esc(a.end)+' · PIC: '+esc(a.pic)+'</div><button id="v9PilotCloseBtn" type="button" style="margin-top:9px;padding:8px 12px;border:0;border-radius:8px;background:#b91c1c;color:#fff;font-weight:800;cursor:pointer;">⏹️ Tutup Pilot</button></div>';
+      const m=d.metrics||{attendance:{},teacher:{},wa:{}};
+      const base=d.baseline||{};
+      h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:10px;">';
+      h+=card('Record ABSENSI',m.attendance?.records??0,'baseline '+(base.absensi??0));
+      h+=card('Siswa Unik',m.attendance?.uniqueStudents??0,'baseline '+(base.uniqueSiswa??0));
+      h+=card('Terlambat',m.attendance?.terlambat??0,'baseline '+(base.terlambat??0));
+      h+=card('Alpa',m.attendance?.alpa??0,'baseline '+(base.alpa??0));
+      h+=card('Presensi Guru',m.teacher?.records??0,'baseline '+(base.guruAbsensi??0));
+      h+=card('WA Terkirim',m.wa?.sent??0,'baseline '+(base.waSent??0));
+      h+=card('WA Gagal',m.wa?.failed??0,'baseline '+(base.waFailed??0));
+      h+='</div>';
+    } else {
+      h+='<div style="padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;"><b>⚪ Belum ada pilot aktif.</b><div style="font-size:12px;color:#64748b;margin-top:4px;">Mulai pilot untuk merekam baseline dan mengamati operasional sekolah selama periode uji.</div></div>';
+    }
+    h+='<div style="margin-top:14px;font-weight:900;">🧪 Checklist Pilot</div>';
+    const c=d.checklist||{};
+    h+='<div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">';
+    (c.checks||[]).forEach(x=>{h+='<div style="padding:10px;border-radius:10px;background:'+(x.ready?'#f0fdf4':'#fffbeb')+';border:1px solid '+(x.ready?'#bbf7d0':'#fde68a')+';"><b>'+(x.ready?'✅':'⚠️')+' '+esc(x.label)+'</b><div style="font-size:11px;color:#64748b;margin-top:3px;">'+esc(x.detail)+'</div></div>';});
+    h+='</div>';
+    h+='<div style="margin-top:14px;font-weight:900;">📝 Catat Issue Pilot</div><div style="display:grid;grid-template-columns:120px 160px 1fr;gap:8px;margin-top:7px;align-items:center;"><select id="v9IssueLevel" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"><option>INFO</option><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select><input id="v9IssueModule" placeholder="Modul, mis. WA" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"><input id="v9IssueDesc" placeholder="Deskripsi masalah" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"></div><button id="v9IssueBtn" type="button" style="margin-top:8px;padding:8px 12px;border:0;border-radius:8px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">📝 Simpan Issue</button>';
+    h+='<div style="margin-top:14px;font-weight:900;">📚 Riwayat Pilot</div><div style="overflow:auto;margin-top:7px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Sekolah</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Mulai</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Selesai</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Status</th></tr></thead><tbody>';
+    (d.history||[]).forEach(x=>{h+='<tr><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.school)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.start)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.end)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.status)+'</td></tr>';});
+    h+='</tbody></table></div>';
+    if(d.issues?.length){h+='<details style="margin-top:10px;"><summary style="font-weight:800;cursor:pointer;">Lihat 20 issue terakhir</summary><div style="overflow:auto;margin-top:7px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th>ID</th><th>Level</th><th>Modul</th><th>Deskripsi</th><th>Status</th></tr></thead><tbody>';d.issues.forEach(x=>{h+='<tr><td>'+esc(x.id)+'</td><td>'+esc(x.level)+'</td><td>'+esc(x.module)+'</td><td>'+esc(x.description)+'</td><td>'+esc(x.status)+'</td></tr>';});h+='</tbody></table></div></details>';}
+    box.innerHTML=h;
+    btn('v9PilotCloseBtn',closePilot);btn('v9IssueBtn',saveIssue);
+  }
+  async function refresh(){if(role()!=='ADMIN')return;try{msg('Memuat Pusat Pilot...','info');const r=await api('smartPilotDashboard');if(!r?.success)throw new Error(r?.message||'Gagal memuat pilot.');render(r.data||{});msg('Pusat Pilot siap.','success');}catch(e){msg(e.message||'Gagal memuat pilot.','error');}}
+  async function setup(){try{const r=await api('smartPilotSetup');if(!r?.success)throw new Error(r?.message||'Setup pilot gagal.');await refresh();}catch(e){msg(e.message||'Setup gagal.','error');}}
+  async function startPilot(){
+    if(!confirm('Mulai pilot sekolah sekarang? Sistem hanya mencatat baseline dan monitoring, tidak membuat absensi palsu.'))return;
+    const school=prompt('Nama sekolah pilot:', ''); if(school===null)return;
+    const days=prompt('Durasi pilot (hari):','30'); if(days===null)return;
+    const n=Math.max(1,parseInt(days,10)||30);const now=new Date();const end=new Date(now.getTime()+(n-1)*86400000);
+    const fmt=x=>{const y=x.getFullYear(),m=String(x.getMonth()+1).padStart(2,'0'),d=String(x.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;};
+    try{msg('Memulai pilot...','info');const r=await api('smartPilotStart',{payload:JSON.stringify({school:school.trim(),start:fmt(now),end:fmt(end),pic:'ADMIN',appVersion:'SMART-1.9.0',apiVersion:'SMART-1.9.0'})});if(!r?.success)throw new Error(r?.message||'Gagal memulai pilot.');await refresh();}catch(e){msg(e.message||'Gagal memulai pilot.','error');}
+  }
+  async function closePilot(){if(!confirm('Tutup pilot aktif? Data absensi tidak akan dihapus.'))return;try{msg('Menutup pilot...','info');const r=await api('smartPilotClose');if(!r?.success)throw new Error(r?.message||'Gagal menutup pilot.');await refresh();}catch(e){msg(e.message||'Gagal menutup pilot.','error');}}
+  async function saveIssue(){const level=document.getElementById('v9IssueLevel')?.value||'INFO',module=document.getElementById('v9IssueModule')?.value||'',description=document.getElementById('v9IssueDesc')?.value||'';if(!description.trim()){msg('Deskripsi issue wajib diisi.','error');return;}try{msg('Menyimpan issue...','info');const r=await api('smartPilotIssue',{payload:JSON.stringify({level:level,module:module,description:description,pic:'ADMIN'})});if(!r?.success)throw new Error(r?.message||'Gagal menyimpan issue.');await refresh();}catch(e){msg(e.message||'Gagal menyimpan issue.','error');}}
+  function html(){return '<section id="'+PANEL_ID+'" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">🧪 Pilot School Control Center</h3><div style="font-size:13px;color:#64748b;">Monitoring sekolah pilot selama ±1 bulan sebelum ekspansi ke sekolah berikutnya.</div></div><div style="display:flex;gap:7px;flex-wrap:wrap;"><button id="v9PilotStartBtn" type="button" style="padding:9px 12px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">▶️ Mulai Pilot</button><button id="v9PilotRefreshBtn" type="button" style="padding:9px 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:800;cursor:pointer;">🔄 Refresh</button></div></div><div id="v9PilotMsg" style="margin-top:9px;font-size:13px;font-weight:700;"></div><div id="v9PilotContent" style="margin-top:10px;"><div style="color:#64748b;">Memuat...</div></div></section>';}
+  function inject(){if(role()!=='ADMIN')return false;const dash=document.getElementById('dashboard');if(!dash)return false;if(document.getElementById(PANEL_ID))return true;const w=document.createElement('div');w.innerHTML=html();const p=w.firstElementChild;if(!p)return false;dash.appendChild(p);btn('v9PilotStartBtn',startPilot);btn('v9PilotRefreshBtn',refresh);setup();return true;}
+  function remove(){if(role()!=='ADMIN')document.getElementById(PANEL_ID)?.remove();}
+  function start(){if(started)return;started=true;const run=()=>{remove();inject();};run();new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+  window.v9SmartPilot={version:'SMART-1.9.0',refresh:refresh,start:startPilot,close:closePilot};
+})();
+
+/* ========================================================================
+ * END V9 SMART PRODUCTIZATION - PILOT SCHOOL CONTROL CENTER
+ * ======================================================================== */
