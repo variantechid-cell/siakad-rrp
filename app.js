@@ -29,7 +29,7 @@
 ============================================================ */
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbyG9NPbVI8JAbh46LecqG3WAOMviBQ7RBG_JNgKTh-N6AQb6aB4lRsZClP5i9oR8d7d/exec';
+  'https://script.google.com/macros/s/AKfycbybMMhzrTv3Uqv3vMAdJTA5Co4FiTh_jZ4ocD5iNdHb2mZBX2S_BJJBrgFCgJIcqb21/exec';
 
 const SESSION_KEY =
   'baitul_ulum_session_token';
@@ -145,179 +145,58 @@ function escapeHTML(value) {
 
 async function apiGet(params = {}, options = {}) {
 
-  const query =
-    new URLSearchParams();
+  const query = new URLSearchParams();
 
+  Object.keys(params).forEach(function (key) {
+    const value = params[key];
+    if (value !== undefined && value !== null && value !== '') query.append(key, String(value));
+  });
 
-  Object.keys(params).forEach(
-    function (key) {
-
-      const value =
-        params[key];
-
-      if (
-        value !== undefined &&
-        value !== null &&
-        value !== ''
-      ) {
-
-        query.append(
-          key,
-          String(value)
-        );
-      }
-
-    }
-  );
-
-
-  /*
-   * Cache buster
-   */
-
-  query.append(
-    '_ts',
-    String(Date.now())
-  );
-
-
-  const url =
-    API_URL +
-    '?' +
-    query.toString();
-
-
-  const timeoutMs =
-    Number(options.timeoutMs) > 0
-      ? Number(options.timeoutMs)
-      : 20000;
-
+  query.append('_ts', String(Date.now()));
+  const url = API_URL + '?' + query.toString();
+  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 20000;
 
   try {
-
-    const controller =
-      new AbortController();
-
-
-    const timeout =
-      setTimeout(
-        function () {
-
-          controller.abort();
-
-        },
-        timeoutMs
-      );
-
-
+    const controller = new AbortController();
+    const timeout = setTimeout(function () { controller.abort(); }, timeoutMs);
     let response;
-
-
-    try {
-
-      response =
-        await fetch(
-          url,
-          {
-            method: 'GET',
-            cache: 'no-store',
-            redirect: 'follow',
-            credentials: 'omit',
-            signal: controller.signal
-          }
-        );
-
-    } finally {
-
-      clearTimeout(timeout);
-
+    try { response = await fetch(url, { method: 'GET', cache: 'no-store', redirect: 'follow', credentials: 'omit', signal: controller.signal }); }
+    finally { clearTimeout(timeout); }
+    if (!response.ok) throw new Error('HTTP ' + response.status + ' ' + response.statusText);
+    const responseText = await response.text();
+    if (!responseText) throw new Error('Server mengirim response kosong.');
+    try { return JSON.parse(responseText); } catch (jsonError) {
+      console.error('Response Apps Script bukan JSON:', responseText.substring(0, 500));
+      throw new Error('Server tidak mengembalikan JSON yang valid.');
     }
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        'HTTP ' +
-        response.status +
-        ' ' +
-        response.statusText
-      );
-    }
-
-
-    const text =
-      await response.text();
-
-
-    if (!text) {
-
-      throw new Error(
-        'Server mengirim response kosong.'
-      );
-    }
-
-
-    let data;
-
-
-    try {
-
-      data =
-        JSON.parse(text);
-
-    } catch (jsonError) {
-
-      console.error(
-        'Response Apps Script bukan JSON:',
-        text.substring(0, 500)
-      );
-
-      throw new Error(
-        'Server tidak mengembalikan JSON yang valid.'
-      );
-    }
-
-
-    return data;
-
-
   } catch (error) {
-
-    console.error(
-      'API REQUEST ERROR:',
-      error
-    );
-
-
-    if (
-      error &&
-      error.name === 'AbortError'
-    ) {
-
-      throw new Error(
-        'Server terlalu lama merespons. Periksa koneksi internet.'
-      );
-    }
-
-
-    if (
-      error &&
-      (
-        error.name === 'TypeError' ||
-        String(error.message)
-          .toLowerCase()
-          .includes('network')
-      )
-    ) {
-
-      throw new Error(
-        'Koneksi ke server absensi gagal. Periksa internet dan pastikan Web App Apps Script masih aktif.'
-      );
-    }
-
-
+    console.error('API GET ERROR:', error);
+    if (error && error.name === 'AbortError') throw new Error('Server terlalu lama merespons. Periksa koneksi internet.');
+    if (error && (error.name === 'TypeError' || String(error.message).toLowerCase().includes('network'))) throw new Error('Koneksi ke server absensi gagal. Periksa internet dan pastikan Web App Apps Script masih aktif.');
     throw error;
   }
+}
+
+/* AUTH V4 INTEGRATION: operasi auth dikirim melalui POST, bukan query string. */
+async function apiPost(params = {}, options = {}) {
+  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 20000;
+  const controller = new AbortController();
+  const timeout = setTimeout(function () { controller.abort(); }, timeoutMs);
+  try {
+    const response = await fetch(API_URL, { method: 'POST', cache: 'no-store', redirect: 'follow', credentials: 'omit', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(params), signal: controller.signal });
+    if (!response.ok) throw new Error('HTTP ' + response.status + ' ' + response.statusText);
+    const responseText = await response.text();
+    if (!responseText) throw new Error('Server mengirim response kosong.');
+    try { return JSON.parse(responseText); } catch (jsonError) {
+      console.error('Response Apps Script POST bukan JSON:', responseText.substring(0, 500));
+      throw new Error('Server tidak mengembalikan JSON yang valid.');
+    }
+  } catch (error) {
+    console.error('API POST ERROR:', error);
+    if (error && error.name === 'AbortError') throw new Error('Server terlalu lama merespons. Periksa koneksi internet.');
+    if (error && (error.name === 'TypeError' || String(error.message).toLowerCase().includes('network'))) throw new Error('Koneksi ke server absensi gagal. Periksa internet dan pastikan Web App Apps Script masih aktif.');
+    throw error;
+  } finally { clearTimeout(timeout); }
 }
 
 
@@ -645,7 +524,7 @@ async function checkSession() {
   try {
 
     const result =
-      await apiGet({
+      await apiPost({
 
         action:
           'checkSession',
@@ -818,7 +697,7 @@ function showLoginMessage(
 ============================================================ */
 
 /*
- * LOGIN SEDERHANA
+ * LOGIN AUTH V4
  *
  * Tidak ada:
  * - SHA-256
@@ -913,7 +792,7 @@ async function loginUser() {
   try {
 
     const result =
-      await apiGet({
+      await apiPost({
 
         action:
           'login',
@@ -1054,7 +933,7 @@ async function logoutUser() {
 
     if (token) {
 
-      await apiGet({
+      await apiPost({
 
         action:
           'logout',
@@ -1555,13 +1434,43 @@ function setTeacherPresenceStatus(status, result) {
   }
 }
 
-function resetTeacherCheckInView() {
+function resetTeacherCheckInView(presence) {
   teacherPresenceState.checkingIn = false;
   teacherPresenceState.lastResult = null;
+
+  /*
+   * Jangan menghapus status presensi yang sudah tersimpan.
+   * presence berasal dari GURU_ABSENSI melalui teacherSchedules.
+   */
+  const saved = presence || null;
+
+  if (saved && saved.status) {
+    setTeacherPresenceStatus(saved.status, {
+      presence: saved
+    });
+
+    setTeacherCheckInMessage(
+      '✅ Presensi untuk jadwal ini sudah tercatat.',
+      'success'
+    );
+
+    const button = $('teacherCheckInButton');
+    if (button) {
+      button.disabled = true;
+      button.textContent = '✅ Presensi Tercatat';
+    }
+
+    return;
+  }
+
   setTeacherPresenceStatus('BELUM ABSEN');
   setTeacherCheckInMessage('');
+
   const info = $('teacherPresenceCheckInInfo');
-  if (info) info.textContent = 'Silakan melakukan check-in untuk jadwal ini.';
+  if (info) {
+    info.textContent = 'Silakan melakukan check-in untuk jadwal ini.';
+  }
+
   const button = $('teacherCheckInButton');
   if (button) {
     button.disabled = false;
@@ -1606,10 +1515,47 @@ async function handleTeacherCheckIn() {
     }
 
     teacherPresenceState.lastResult = result;
-    const status = result.statusPresensi || result.presence?.status || result.statusGuru || 'HADIR';
-    setTeacherPresenceStatus(status, result);
 
-    const already = String(result.status || '').toUpperCase() === 'ALREADY';
+    /*
+     * Backend menggunakan property `attendance`.
+     * Simpan ke object jadwal aktif agar state UI langsung
+     * konsisten dengan data server.
+     */
+    const savedPresence =
+      result.attendance ||
+      result.presence ||
+      null;
+
+    const status =
+      savedPresence?.status ||
+      result.statusPresensi ||
+      result.statusGuru ||
+      'HADIR';
+
+    setTeacherPresenceStatus(status, {
+      presence: savedPresence || {
+        status: status
+      }
+    });
+
+    if (currentTeacherSchedule) {
+      currentTeacherSchedule.presence =
+        savedPresence
+          ? {
+              tanggal: savedPresence.tanggal || '',
+              jadwalId: savedPresence.jadwalId || currentTeacherSchedule.jadwalId,
+              guruId: savedPresence.guruId || currentTeacherSchedule.guruId,
+              status: savedPresence.status || status,
+              jam: savedPresence.jam || '',
+              id: savedPresence.id || '',
+              catatan: savedPresence.catatan || ''
+            }
+          : null;
+    }
+
+    const already =
+      String(result.status || '').toUpperCase() === 'ALREADY_CHECKED_IN';
+
     setTeacherCheckInMessage(
       already
         ? 'ℹ️ Presensi untuk jadwal ini sudah tercatat di GURU_ABSENSI.'
@@ -1680,7 +1626,12 @@ async function selectTeacherSchedule(
   }
 
   ensureTeacherCheckInPanel();
-  resetTeacherCheckInView();
+
+  /*
+   * Gunakan status presensi dari server.
+   * Jangan reset ke BELUM ABSEN setiap kali jadwal dipilih.
+   */
+  resetTeacherCheckInView(schedule.presence);
 
 
 
@@ -9577,12 +9528,12 @@ async function initializeApp() {
 
 
   console.log(
-    'APP.JS FINAL V14'
+    'APP.JS AUTH V4 INTEGRATED V21'
   );
 
 
   console.log(
-    'LOGIN: PASSWORD BIASA'
+    'LOGIN: AUTH V4 + POST'
   );
 
 
@@ -11450,288 +11401,6 @@ window.loadTeacherRecapOptions =
 
 
 /* ========================================================================
- * V4 SMART PRODUCTIZATION - PROFIL & KONFIGURASI SEKOLAH
- * ------------------------------------------------------------------------
- * Hanya ADMIN. Tidak tampil di Guru/Kepala Sekolah.
- * ======================================================================== */
-(function () {
-  'use strict';
-
-  const V4_PANEL_ID = 'v4SmartSchoolProfilePanel';
-  let v4ObserverStarted = false;
-
-  function v4Role() {
-    try {
-      return String(
-        (typeof currentUser !== 'undefined' && currentUser && currentUser.role) ||
-        (window.currentUser && window.currentUser.role) || ''
-      ).toUpperCase();
-    } catch (e) { return ''; }
-  }
-
-  function v4Token() {
-    try {
-      return (typeof currentToken !== 'undefined' ? currentToken : '') ||
-        window.currentToken || '';
-    } catch (e) { return window.currentToken || ''; }
-  }
-
-  function v4Esc(value) {
-    try { return escapeHTML(String(value == null ? '' : value)); }
-    catch (e) { return String(value == null ? '' : value); }
-  }
-
-  function v4Val(id) {
-    const el = document.getElementById(id);
-    return el ? String(el.value || '').trim() : '';
-  }
-
-  function v4SetVal(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.value = value == null ? '' : value;
-  }
-
-  function v4PanelHTML() {
-    return `
-      <section id="${V4_PANEL_ID}" style="
-        margin:20px 0;
-        padding:20px;
-        border:1px solid #dbe4ee;
-        border-radius:16px;
-        background:#fff;
-        box-shadow:0 6px 20px rgba(15,23,42,.06);
-      ">
-        <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">
-              SMART PRODUCT • ADMIN
-            </div>
-            <h3 style="margin:4px 0;font-size:20px;">🏫 Profil & Konfigurasi Sekolah</h3>
-            <div style="font-size:13px;color:#64748b;">
-              Identitas sekolah untuk fondasi branding, laporan, onboarding, dan pengembangan produk SMART.
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button type="button" id="v4SmartProfileSetupBtn" style="padding:9px 13px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#334155;font-weight:700;cursor:pointer;">
-              🧩 Siapkan Profil
-            </button>
-            <button type="button" id="v4SmartProfileLoadBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:700;cursor:pointer;">
-              🔄 Muat Data
-            </button>
-            <button type="button" id="v4SmartProfileSaveBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#475569;color:#fff;font-weight:700;cursor:pointer;">
-              💾 Simpan Profil
-            </button>
-          </div>
-        </div>
-
-        <div id="v4SmartProfileMessage" style="margin-top:14px;font-size:13px;"></div>
-
-        <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-          ${v4Input('v4NamaSekolah','Nama Sekolah *','namaSekolah','text')}
-          ${v4Input('v4Npsn','NPSN','npsn','text')}
-          ${v4Select('v4Jenjang','Jenjang','jenjang',['','SD','SMP','SMA','SMK','MTs','MA'])}
-          ${v4Select('v4StatusSekolah','Status Sekolah','statusSekolah',['AKTIF','NONAKTIF'])}
-          ${v4Input('v4Alamat','Alamat','alamat','text')}
-          ${v4Input('v4Desa','Desa/Kelurahan','desa','text')}
-          ${v4Input('v4Kecamatan','Kecamatan','kecamatan','text')}
-          ${v4Input('v4Kabupaten','Kabupaten/Kota','kabupatenKota','text')}
-          ${v4Input('v4Provinsi','Provinsi','provinsi','text')}
-          ${v4Input('v4KodePos','Kode Pos','kodePos','text')}
-          ${v4Input('v4Telepon','Telepon','telepon','text')}
-          ${v4Input('v4Email','Email','email','email')}
-          ${v4Input('v4Website','Website','website','url')}
-          ${v4Input('v4Kepala','Nama Kepala Sekolah','namaKepalaSekolah','text')}
-          ${v4Input('v4WaAdmin','No. WhatsApp Admin','noWaAdmin','text')}
-          ${v4Input('v4Logo','URL Logo Sekolah','logoUrl','url')}
-          ${v4Input('v4TahunAjaran','Tahun Ajaran','tahunAjaran','text')}
-          ${v4Select('v4Timezone','Timezone','timezone',['Asia/Jakarta','Asia/Makassar','Asia/Jayapura'])}
-        </div>
-
-        <div id="v4SmartProfilePreview" style="margin-top:14px;"></div>
-      </section>
-    `;
-  }
-
-  function v4Input(id, label, key, type) {
-    return `<label style="display:block;font-size:12px;font-weight:700;color:#475569;">
-      ${v4Esc(label)}
-      <input id="${id}" data-v4-key="${v4Esc(key)}" type="${type || 'text'}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px 11px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#0f172a;">
-    </label>`;
-  }
-
-  function v4Select(id, label, key, options) {
-    return `<label style="display:block;font-size:12px;font-weight:700;color:#475569;">
-      ${v4Esc(label)}
-      <select id="${id}" data-v4-key="${v4Esc(key)}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px 11px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#0f172a;">
-        ${options.map(function(x){ return `<option value="${v4Esc(x)}">${v4Esc(x || 'Pilih')}</option>`; }).join('')}
-      </select>
-    </label>`;
-  }
-
-  function v4SetMessage(text, type) {
-    const el = document.getElementById('v4SmartProfileMessage');
-    if (!el) return;
-    const color = type === 'error' ? '#b91c1c' : type === 'success' ? '#047857' : '#475569';
-    el.innerHTML = `<div style="color:${color};font-weight:600;">${v4Esc(text)}</div>`;
-  }
-
-  function v4ReadForm() {
-    const data = {};
-    document.querySelectorAll('#' + V4_PANEL_ID + ' [data-v4-key]').forEach(function(el) {
-      data[el.getAttribute('data-v4-key')] = String(el.value || '').trim();
-    });
-    return data;
-  }
-
-  function v4Render(profile) {
-    profile = profile || {};
-    v4SetVal('v4NamaSekolah', profile.namaSekolah);
-    v4SetVal('v4Npsn', profile.npsn);
-    v4SetVal('v4Jenjang', profile.jenjang);
-    v4SetVal('v4StatusSekolah', profile.statusSekolah || 'AKTIF');
-    v4SetVal('v4Alamat', profile.alamat);
-    v4SetVal('v4Desa', profile.desa);
-    v4SetVal('v4Kecamatan', profile.kecamatan);
-    v4SetVal('v4Kabupaten', profile.kabupatenKota);
-    v4SetVal('v4Provinsi', profile.provinsi);
-    v4SetVal('v4KodePos', profile.kodePos);
-    v4SetVal('v4Telepon', profile.telepon);
-    v4SetVal('v4Email', profile.email);
-    v4SetVal('v4Website', profile.website);
-    v4SetVal('v4Kepala', profile.namaKepalaSekolah);
-    v4SetVal('v4WaAdmin', profile.noWaAdmin);
-    v4SetVal('v4Logo', profile.logoUrl);
-    v4SetVal('v4TahunAjaran', profile.tahunAjaran);
-    v4SetVal('v4Timezone', profile.timezone || 'Asia/Jakarta');
-
-    const preview = document.getElementById('v4SmartProfilePreview');
-    if (preview) {
-      const name = profile.namaSekolah || 'Nama sekolah belum diisi';
-      const loc = [profile.kabupatenKota, profile.provinsi].filter(Boolean).join(', ');
-      preview.innerHTML = `
-        <div style="padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
-          <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700;">Preview Identitas</div>
-          <div style="font-size:18px;font-weight:800;margin-top:3px;">${v4Esc(name)}</div>
-          <div style="font-size:13px;color:#64748b;margin-top:3px;">${v4Esc(loc || 'Lokasi belum diisi')}</div>
-          <div style="font-size:12px;color:#64748b;margin-top:7px;">NPSN: ${v4Esc(profile.npsn || '-')} • Jenjang: ${v4Esc(profile.jenjang || '-')} • TA: ${v4Esc(profile.tahunAjaran || '-')}</div>
-        </div>`;
-    }
-  }
-
-  async function v4Load() {
-    if (v4Role() !== 'ADMIN') return;
-    v4SetMessage('Memuat profil sekolah...', 'info');
-    try {
-      const result = await apiGet({ action:'smartSchoolProfile', token:v4Token() });
-      if (!result || !result.success) throw new Error((result && (result.message || result.error)) || 'Profil gagal dimuat.');
-      v4Render(result.data && result.data.profile ? result.data.profile : {});
-      v4SetMessage('Profil sekolah berhasil dimuat.', 'success');
-    } catch (error) {
-      console.error('V4 SMART Profil:', error);
-      v4SetMessage(error.message || 'Profil gagal dimuat.', 'error');
-    }
-  }
-
-  async function v4Setup() {
-    if (v4Role() !== 'ADMIN') return;
-    v4SetMessage('Menyiapkan sheet profil sekolah...', 'info');
-    try {
-      const result = await apiGet({ action:'smartSchoolProfileSetup', token:v4Token() });
-      if (!result || !result.success) throw new Error((result && (result.message || result.error)) || 'Setup profil gagal.');
-      v4Render(result.data && result.data.profile ? result.data.profile : {});
-      v4SetMessage('Profil sekolah siap digunakan.', 'success');
-    } catch (error) {
-      v4SetMessage(error.message || 'Setup profil gagal.', 'error');
-    }
-  }
-
-  async function v4Save() {
-    if (v4Role() !== 'ADMIN') return;
-    const payload = v4ReadForm();
-    if (!payload.namaSekolah) {
-      v4SetMessage('Nama Sekolah wajib diisi.', 'error');
-      const el = document.getElementById('v4NamaSekolah');
-      if (el) el.focus();
-      return;
-    }
-    v4SetMessage('Menyimpan profil sekolah...', 'info');
-    try {
-      const result = await apiGet({
-        action:'smartSchoolProfileSave',
-        token:v4Token(),
-        payload:JSON.stringify(payload)
-      });
-      if (!result || !result.success) throw new Error((result && (result.message || result.error)) || 'Profil gagal disimpan.');
-      v4Render(result.data && result.data.profile ? result.data.profile : payload);
-      v4SetMessage('Profil sekolah berhasil disimpan.', 'success');
-    } catch (error) {
-      console.error('V4 SMART Profil Save:', error);
-      v4SetMessage(error.message || 'Profil gagal disimpan.', 'error');
-    }
-  }
-
-  function v4Inject() {
-    if (v4Role() !== 'ADMIN') return false;
-    const dashboard = document.getElementById('dashboard');
-    if (!dashboard) return false;
-    if (document.getElementById(V4_PANEL_ID)) return true;
-
-    const section = document.createElement('div');
-    section.innerHTML = v4PanelHTML();
-    const panel = section.firstElementChild;
-    if (!panel) return false;
-    dashboard.appendChild(panel);
-
-    const setupBtn = document.getElementById('v4SmartProfileSetupBtn');
-    const loadBtn = document.getElementById('v4SmartProfileLoadBtn');
-    const saveBtn = document.getElementById('v4SmartProfileSaveBtn');
-    if (setupBtn) setupBtn.addEventListener('click', v4Setup);
-    if (loadBtn) loadBtn.addEventListener('click', v4Load);
-    if (saveBtn) saveBtn.addEventListener('click', v4Save);
-
-    setTimeout(v4Load, 150);
-    return true;
-  }
-
-  function v4RemoveIfNotAdmin() {
-    if (v4Role() !== 'ADMIN') {
-      const old = document.getElementById(V4_PANEL_ID);
-      if (old) old.remove();
-    }
-  }
-
-  function v4StartObserver() {
-    if (v4ObserverStarted) return;
-    v4ObserverStarted = true;
-    const tryInject = function() {
-      v4RemoveIfNotAdmin();
-      v4Inject();
-    };
-    tryInject();
-    const observer = new MutationObserver(function() { tryInject(); });
-    observer.observe(document.body, { childList:true, subtree:true });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', v4StartObserver, { once:true });
-  } else {
-    v4StartObserver();
-  }
-
-  window.v4SmartSchoolProfile = {
-    version:'SMART-1.3',
-    refresh:v4Load,
-    setup:v4Setup,
-    save:v4Save
-  };
-})();
-
-/* ========================================================================
- * END V4 SMART PRODUCTIZATION - PROFIL & KONFIGURASI SEKOLAH
- * ======================================================================== */
-
-
-/* ========================================================================
  * V5.1 SMART PRODUCTIZATION - IMPORT DATA SEKOLAH
  * Admin-only additive module. CSV / TSV / Excel copy-paste workflow.
  * ======================================================================== */
@@ -12212,289 +11881,698 @@ window.loadTeacherRecapOptions =
 
 
 /* ========================================================================
- * V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
+ * V9.2 SMART PRODUCTIZATION - PILOT SCHOOL CONTROL CENTER
  * ------------------------------------------------------------------------
- * Panel ADMIN only. Tidak mengubah index.html/style.css.
+ * ADMIN ONLY.
+ * Fokus: monitoring pilot nyata, progress, baseline, issue, checklist.
+ * Tidak membuat data absensi palsu.
  * ======================================================================== */
 (function(){
   'use strict';
-  const V8_PANEL_ID='v8SmartNewSchoolWizardPanel';
-  let started=false;
 
-  function role(){return String((typeof currentUser!=='undefined'&&currentUser?.role)||window.currentUser?.role||'').toUpperCase();}
-  function token(){return (typeof currentToken!=='undefined'&&currentToken)||window.currentToken||'';}
-  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));}
-  function msg(text,type){const el=document.getElementById('v8SmartWizardMessage');if(!el)return;el.textContent=text||'';el.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';}
+  const PANEL_ID = 'v9SmartPilotPanel';
+  const REFRESH_MS = 60000;
+  let started = false;
+  let refreshTimer = null;
 
-  function stepButton(id){
-    const map={
-      PROFILE:'v4SmartSchoolProfilePanel',
-      SISWA:'v5SmartImportPanel',
-      GURU:'v5SmartImportPanel',
-      KELAS:'v5SmartImportPanel',
-      MAPEL:'v5SmartImportPanel',
-      JADWAL:'v7SmartSchedulePanel',
-      VALIDATION:'v6SmartMasterPanel'
+  function role(){
+    return String(
+      (typeof currentUser !== 'undefined' && currentUser?.role) ||
+      window.currentUser?.role || ''
+    ).toUpperCase();
+  }
+
+  function token(){
+    return (
+      (typeof currentToken !== 'undefined' && currentToken) ||
+      window.currentToken ||
+      ''
+    );
+  }
+
+  function esc(v){
+    if (typeof escapeHTML === 'function') {
+      return escapeHTML(String(v ?? ''));
+    }
+    return String(v ?? '').replace(/[&<>'"]/g, c => ({
+      '&':'&amp;',
+      '<':'&lt;',
+      '>':'&gt;',
+      "'":'&#39;',
+      '"':'&quot;'
+    }[c]));
+  }
+
+  function msg(text, type){
+    const el = document.getElementById('v9PilotMsg');
+    if (!el) return;
+    el.textContent = text || '';
+    el.style.color =
+      type === 'error' ? '#b91c1c' :
+      type === 'success' ? '#047857' :
+      '#475569';
+  }
+
+  function api(action, extra){
+    return apiGet(
+      Object.assign(
+        { action: action, token: token() },
+        extra || {}
+      )
+    );
+  }
+
+  function card(title, value, sub, tone){
+    const border =
+      tone === 'warning' ? '#fde68a' :
+      tone === 'danger' ? '#fecaca' :
+      tone === 'success' ? '#bbf7d0' :
+      '#dbe4ee';
+
+    const bg =
+      tone === 'warning' ? '#fffbeb' :
+      tone === 'danger' ? '#fef2f2' :
+      tone === 'success' ? '#f0fdf4' :
+      '#fff';
+
+    return `
+      <div style="padding:13px;border:1px solid ${border};border-radius:12px;background:${bg};">
+        <div style="font-size:11px;color:#64748b;font-weight:700;">${esc(title)}</div>
+        <div style="font-size:22px;font-weight:900;margin-top:4px;">${esc(value)}</div>
+        <div style="font-size:11px;color:#64748b;margin-top:3px;">${esc(sub || '')}</div>
+      </div>`;
+  }
+
+  function dateKey(value){
+    const s = String(value || '');
+    return s.length >= 10 ? s.substring(0,10) : s;
+  }
+
+  function diff(a, b){
+    return Number(a || 0) - Number(b || 0);
+  }
+
+  function deltaText(current, baseline){
+    const d = diff(current, baseline);
+    return d > 0 ? `+${d} dari baseline` :
+      d < 0 ? `${d} dari baseline` :
+      'sama dengan baseline';
+  }
+
+  function progressInfo(active){
+    if (!active) return null;
+
+    const start = new Date(dateKey(active.start) + 'T00:00:00');
+    const end = new Date(dateKey(active.end) + 'T00:00:00');
+    const now = new Date();
+    const total = Math.max(
+      1,
+      Math.floor((end - start) / 86400000) + 1
+    );
+    const elapsed = Math.min(
+      total,
+      Math.max(
+        0,
+        Math.floor((now - start) / 86400000) + 1
+      )
+    );
+    const remaining = Math.max(0, total - elapsed);
+    const percent = Math.max(
+      0,
+      Math.min(100, Math.round((elapsed / total) * 100))
+    );
+
+    return {
+      total,
+      elapsed,
+      remaining,
+      percent
     };
-    const target=map[id];
-    if(target){const el=document.getElementById(target);if(el){el.scrollIntoView({behavior:'smooth',block:'start'});return;}}
-    const dashboard=document.getElementById('dashboard');dashboard?.scrollIntoView({behavior:'smooth',block:'start'});
   }
 
-  function render(data){
-    const box=document.getElementById('v8SmartWizardContent'); if(!box)return;
-    const pct=Number(data.progress||0);
-    const color=pct===100?'#16a34a':pct>=70?'#0f766e':'#f59e0b';
-    let html='';
-    html+='<div style="margin-top:12px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">';
-    html+='<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><b>Progress onboarding</b><b>'+pct+'%</b></div>';
-    html+='<div style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px;"><div style="width:'+Math.max(0,Math.min(100,pct))+'%;height:100%;background:'+color+';transition:width .25s;"></div></div>';
-    html+='<div style="margin-top:8px;font-size:12px;color:#64748b;">'+Number(data.readyCount||0)+' dari '+Number(data.totalSteps||0)+' tahap siap.</div></div>';
-
-    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px;">';
-    (data.steps||[]).forEach(function(s){
-      const ok=!!s.ready;
-      html+='<div style="border:1px solid '+(ok?'#bbf7d0':'#fde68a')+';background:'+(ok?'#f0fdf4':'#fffbeb')+';border-radius:12px;padding:12px;">';
-      html+='<div style="font-weight:800;">'+(ok?'✅':'⚠️')+' '+esc(s.title)+'</div>';
-      html+='<div style="font-size:12px;color:#64748b;margin-top:4px;">'+esc(s.count||'')+'</div>';
-      html+='<div style="font-size:12px;margin-top:7px;line-height:1.45;">'+esc(s.detail||'')+'</div>';
-      if(!ok) html+='<button type="button" data-v8-step="'+esc(s.id)+'" style="margin-top:9px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-weight:700;cursor:pointer;">Buka Tahap</button>';
-      html+='</div>';
-    });
-    html+='</div>';
-
-    if(data.ready){
-      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#ecfdf5;color:#065f46;font-weight:800;">🎉 Checklist dasar sekolah baru sudah lengkap. Sistem siap masuk tahap pilot/operasional.</div>';
-    }else if(data.next){
-      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#fff7ed;color:#9a3412;"><b>➡️ Tahap berikutnya:</b> '+esc(data.next.title)+'<br><span style="font-size:12px;">'+esc(data.next.detail||'')+'</span></div>';
-    }
-
-    if(data.details?.jadwal?.issues?.length){
-      html+='<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;">Lihat masalah jadwal (maks. 20)</summary><div style="overflow:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Baris</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">ID</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Keterangan</th></tr></thead><tbody>';
-      data.details.jadwal.issues.forEach(function(x){html+='<tr><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.row)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.id)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.message)+'</td></tr>';});
-      html+='</tbody></table></div></details>';
-    }
-    box.innerHTML=html;
-    box.querySelectorAll('[data-v8-step]').forEach(function(btn){btn.addEventListener('click',function(){stepButton(btn.getAttribute('data-v8-step'));});});
-  }
-
-  async function check(){
-    if(role()!=='ADMIN')return;
-    try{
-      msg('Memeriksa kesiapan sekolah baru...','info');
-      const r=await apiGet({action:'smartNewSchoolWizard',token:token()});
-      if(!r?.success)throw new Error(r?.message||'Pemeriksaan gagal.');
-      render(r.data||{});
-      msg('Pemeriksaan onboarding selesai.','success');
-    }catch(e){msg(e.message||'Pemeriksaan gagal.','error');}
-  }
-
-  function html(){return `
-<section id="${V8_PANEL_ID}" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);">
-<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">🧭 Wizard Sekolah Baru</h3><div style="font-size:13px;color:#64748b;">Satu halaman untuk memeriksa kesiapan Profil, Master Data, Jadwal, dan validasi sebelum sistem dipakai di sekolah baru.</div></div><button type="button" id="v8SmartWizardCheckBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">🔍 Cek Kesiapan Sekolah</button></div>
-<div style="margin-top:10px;padding:11px;border-radius:10px;background:#f8fafc;color:#475569;font-size:12px;">Wizard ini <b>tidak mengubah data</b>. Fungsinya hanya membaca kondisi sistem dan mengarahkan ADMIN ke tahap yang masih perlu diselesaikan.</div>
-<div id="v8SmartWizardMessage" style="margin-top:10px;font-size:13px;font-weight:700;"></div>
-<div id="v8SmartWizardContent" style="margin-top:10px;"><div style="color:#64748b;">Klik <b>🔍 Cek Kesiapan Sekolah</b> untuk memulai.</div></div>
-</section>`;}
-
-  function inject(){
-    if(role()!=='ADMIN')return false;
-    const dash=document.getElementById('dashboard'); if(!dash)return false;
-    if(document.getElementById(V8_PANEL_ID))return true;
-    const wrap=document.createElement('div');wrap.innerHTML=html();const panel=wrap.firstElementChild;if(!panel)return false;
-    dash.appendChild(panel);
-    document.getElementById('v8SmartWizardCheckBtn')?.addEventListener('click',check);
-    check();
-    return true;
-  }
-  function remove(){if(role()!=='ADMIN')document.getElementById(V8_PANEL_ID)?.remove();}
-  function start(){if(started)return;started=true;const run=()=>{remove();inject();};run();new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
-  window.v8SmartNewSchoolWizard={version:'SMART-1.8.2',refresh:check};
-})();
-
-/* ========================================================================
- * END V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
- * ======================================================================== */
-
-
-/* ========================================================================
- * V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
- * ------------------------------------------------------------------------
- * Panel ADMIN only. Tidak mengubah index.html/style.css.
- * ======================================================================== */
-(function(){
-  'use strict';
-  const V8_PANEL_ID='v8SmartNewSchoolWizardPanel';
-  let started=false;
-
-  function role(){return String((typeof currentUser!=='undefined'&&currentUser?.role)||window.currentUser?.role||'').toUpperCase();}
-  function token(){return (typeof currentToken!=='undefined'&&currentToken)||window.currentToken||'';}
-  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));}
-  function msg(text,type){const el=document.getElementById('v8SmartWizardMessage');if(!el)return;el.textContent=text||'';el.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';}
-
-  function stepButton(id){
-    const map={
-      PROFILE:'v4SmartSchoolProfilePanel',
-      SISWA:'v5SmartImportPanel',
-      GURU:'v5SmartImportPanel',
-      KELAS:'v5SmartImportPanel',
-      MAPEL:'v5SmartImportPanel',
-      JADWAL:'v7SmartSchedulePanel',
-      VALIDATION:'v6SmartMasterPanel'
-    };
-    const target=map[id];
-    if(target){const el=document.getElementById(target);if(el){el.scrollIntoView({behavior:'smooth',block:'start'});return;}}
-    const dashboard=document.getElementById('dashboard');dashboard?.scrollIntoView({behavior:'smooth',block:'start'});
-  }
-
-  function render(data){
-    const box=document.getElementById('v8SmartWizardContent'); if(!box)return;
-    const pct=Number(data.progress||0);
-    const color=pct===100?'#16a34a':pct>=70?'#0f766e':'#f59e0b';
-    let html='';
-    html+='<div style="margin-top:12px;padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">';
-    html+='<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><b>Progress onboarding</b><b>'+pct+'%</b></div>';
-    html+='<div style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:8px;"><div style="width:'+Math.max(0,Math.min(100,pct))+'%;height:100%;background:'+color+';transition:width .25s;"></div></div>';
-    html+='<div style="margin-top:8px;font-size:12px;color:#64748b;">'+Number(data.readyCount||0)+' dari '+Number(data.totalSteps||0)+' tahap siap.</div></div>';
-
-    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:12px;">';
-    (data.steps||[]).forEach(function(s){
-      const ok=!!s.ready;
-      html+='<div style="border:1px solid '+(ok?'#bbf7d0':'#fde68a')+';background:'+(ok?'#f0fdf4':'#fffbeb')+';border-radius:12px;padding:12px;">';
-      html+='<div style="font-weight:800;">'+(ok?'✅':'⚠️')+' '+esc(s.title)+'</div>';
-      html+='<div style="font-size:12px;color:#64748b;margin-top:4px;">'+esc(s.count||'')+'</div>';
-      html+='<div style="font-size:12px;margin-top:7px;line-height:1.45;">'+esc(s.detail||'')+'</div>';
-      if(!ok) html+='<button type="button" data-v8-step="'+esc(s.id)+'" style="margin-top:9px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-weight:700;cursor:pointer;">Buka Tahap</button>';
-      html+='</div>';
-    });
-    html+='</div>';
-
-    if(data.ready){
-      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#ecfdf5;color:#065f46;font-weight:800;">🎉 Checklist dasar sekolah baru sudah lengkap. Sistem siap masuk tahap pilot/operasional.</div>';
-    }else if(data.next){
-      html+='<div style="margin-top:12px;padding:13px;border-radius:11px;background:#fff7ed;color:#9a3412;"><b>➡️ Tahap berikutnya:</b> '+esc(data.next.title)+'<br><span style="font-size:12px;">'+esc(data.next.detail||'')+'</span></div>';
-    }
-
-    if(data.details?.jadwal?.issues?.length){
-      html+='<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;">Lihat masalah jadwal (maks. 20)</summary><div style="overflow:auto;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Baris</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">ID</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Keterangan</th></tr></thead><tbody>';
-      data.details.jadwal.issues.forEach(function(x){html+='<tr><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.row)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.id)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.message)+'</td></tr>';});
-      html+='</tbody></table></div></details>';
-    }
-    box.innerHTML=html;
-    box.querySelectorAll('[data-v8-step]').forEach(function(btn){btn.addEventListener('click',function(){stepButton(btn.getAttribute('data-v8-step'));});});
-  }
-
-  async function check(){
-    if(role()!=='ADMIN')return;
-    try{
-      msg('Memeriksa kesiapan sekolah baru...','info');
-      const r=await apiGet({action:'smartNewSchoolWizard',token:token()});
-      if(!r?.success)throw new Error(r?.message||'Pemeriksaan gagal.');
-      render(r.data||{});
-      msg('Pemeriksaan onboarding selesai.','success');
-    }catch(e){msg(e.message||'Pemeriksaan gagal.','error');}
-  }
-
-  function html(){return `
-<section id="${V8_PANEL_ID}" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);">
-<div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">🧭 Wizard Sekolah Baru</h3><div style="font-size:13px;color:#64748b;">Satu halaman untuk memeriksa kesiapan Profil, Master Data, Jadwal, dan validasi sebelum sistem dipakai di sekolah baru.</div></div><button type="button" id="v8SmartWizardCheckBtn" style="padding:9px 13px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">🔍 Cek Kesiapan Sekolah</button></div>
-<div style="margin-top:10px;padding:11px;border-radius:10px;background:#f8fafc;color:#475569;font-size:12px;">Wizard ini <b>tidak mengubah data</b>. Fungsinya hanya membaca kondisi sistem dan mengarahkan ADMIN ke tahap yang masih perlu diselesaikan.</div>
-<div id="v8SmartWizardMessage" style="margin-top:10px;font-size:13px;font-weight:700;"></div>
-<div id="v8SmartWizardContent" style="margin-top:10px;"><div style="color:#64748b;">Klik <b>🔍 Cek Kesiapan Sekolah</b> untuk memulai.</div></div>
-</section>`;}
-
-  function inject(){
-    if(role()!=='ADMIN')return false;
-    const dash=document.getElementById('dashboard'); if(!dash)return false;
-    if(document.getElementById(V8_PANEL_ID))return true;
-    const wrap=document.createElement('div');wrap.innerHTML=html();const panel=wrap.firstElementChild;if(!panel)return false;
-    dash.appendChild(panel);
-    document.getElementById('v8SmartWizardCheckBtn')?.addEventListener('click',check);
-    check();
-    return true;
-  }
-  function remove(){if(role()!=='ADMIN')document.getElementById(V8_PANEL_ID)?.remove();}
-  function start(){if(started)return;started=true;const run=()=>{remove();inject();};run();new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
-  window.v8SmartNewSchoolWizard={version:'SMART-1.8.2',refresh:check};
-})();
-
-/* ========================================================================
- * END V8 SMART PRODUCTIZATION - WIZARD SEKOLAH BARU
- * ======================================================================== */
-
-
-/* ========================================================================
- * V9 SMART PRODUCTIZATION - PILOT SCHOOL CONTROL CENTER
- * ------------------------------------------------------------------------
- * ADMIN ONLY. Tidak mengubah index.html/style.css.
- * Pilot bersifat monitoring, tidak membuat absensi test/palsu.
- * ======================================================================== */
-(function(){
-  'use strict';
-  const PANEL_ID='v9SmartPilotPanel';
-  let started=false;
-  function role(){return String((typeof currentUser!=='undefined'&&currentUser?.role)||window.currentUser?.role||'').toUpperCase();}
-  function token(){return (typeof currentToken!=='undefined'&&currentToken)||window.currentToken||'';}
-  function esc(v){return typeof escapeHTML==='function'?escapeHTML(String(v??'')):String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));}
-  function msg(t,type){const e=document.getElementById('v9PilotMsg');if(!e)return;e.textContent=t||'';e.style.color=type==='error'?'#b91c1c':type==='success'?'#047857':'#475569';}
-  function btn(id,fn){document.getElementById(id)?.addEventListener('click',fn);}
-  async function api(action,extra){return await apiGet(Object.assign({action:action,token:token()},extra||{}));}
-  function card(title,value,sub){return '<div style="padding:12px;border:1px solid #dbe4ee;border-radius:12px;background:#fff;"><div style="font-size:11px;color:#64748b;font-weight:700;">'+esc(title)+'</div><div style="font-size:21px;font-weight:900;margin-top:4px;">'+esc(value)+'</div><div style="font-size:11px;color:#64748b;margin-top:3px;">'+esc(sub||'')+'</div></div>';}
   function render(d){
-    const box=document.getElementById('v9PilotContent');if(!box)return;
-    let h='';
-    const a=d.activePilot;
-    if(a){
-      h+='<div style="padding:14px;border-radius:12px;background:#ecfdf5;border:1px solid #bbf7d0;"><b>🟢 Pilot AKTIF</b><div style="font-size:13px;margin-top:5px;">'+esc(a.school)+' · '+esc(a.start)+' s/d '+esc(a.end)+' · PIC: '+esc(a.pic)+'</div><button id="v9PilotCloseBtn" type="button" style="margin-top:9px;padding:8px 12px;border:0;border-radius:8px;background:#b91c1c;color:#fff;font-weight:800;cursor:pointer;">⏹️ Tutup Pilot</button></div>';
-      const m=d.metrics||{attendance:{},teacher:{},wa:{}};
-      const base=d.baseline||{};
-      h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:10px;">';
-      h+=card('Record ABSENSI',m.attendance?.records??0,'baseline '+(base.absensi??0));
-      h+=card('Siswa Unik',m.attendance?.uniqueStudents??0,'baseline '+(base.uniqueSiswa??0));
-      h+=card('Terlambat',m.attendance?.terlambat??0,'baseline '+(base.terlambat??0));
-      h+=card('Alpa',m.attendance?.alpa??0,'baseline '+(base.alpa??0));
-      h+=card('Presensi Guru',m.teacher?.records??0,'baseline '+(base.guruAbsensi??0));
-      h+=card('WA Terkirim',m.wa?.sent??0,'baseline '+(base.waSent??0));
-      h+=card('WA Gagal',m.wa?.failed??0,'baseline '+(base.waFailed??0));
-      h+='</div>';
+    const box = document.getElementById('v9PilotContent');
+    if (!box) return;
+
+    const active = d.activePilot;
+    const metrics = d.metrics || {};
+    const baseline = d.baseline || {};
+    const p = progressInfo(active);
+
+    let h = '';
+
+    if (active) {
+      h += `
+        <div style="padding:14px;border-radius:12px;background:#ecfdf5;border:1px solid #bbf7d0;">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+            <div>
+              <b>🟢 Pilot AKTIF</b>
+              <div style="font-size:13px;margin-top:5px;">
+                ${esc(active.school)} · ${esc(active.start)} s/d ${esc(active.end)}
+              </div>
+              <div style="font-size:12px;color:#64748b;margin-top:3px;">
+                PIC: ${esc(active.pic || 'ADMIN')} · ID: ${esc(active.id || '-')}
+              </div>
+            </div>
+            <button id="v9PilotCloseBtn" type="button"
+              style="padding:8px 11px;border:0;border-radius:8px;background:#b91c1c;color:#fff;font-weight:800;cursor:pointer;">
+              ⏹️ Tutup Pilot
+            </button>
+          </div>
+
+          <div style="margin-top:12px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b;">
+              <span>Progress pilot</span>
+              <span>${p ? p.percent : 0}%</span>
+            </div>
+            <div style="height:9px;background:#d1fae5;border-radius:99px;overflow:hidden;margin-top:5px;">
+              <div style="height:100%;width:${p ? p.percent : 0}%;background:#0f766e;border-radius:99px;"></div>
+            </div>
+            <div style="font-size:11px;color:#64748b;margin-top:5px;">
+              ${p ? `${p.elapsed} hari berjalan · ${p.remaining} hari tersisa · total ${p.total} hari` : ''}
+            </div>
+          </div>
+        </div>`;
+
+      const a = metrics.attendance || {};
+      const t = metrics.teacher || {};
+      const w = metrics.wa || {};
+
+      h += `
+        <div style="margin-top:12px;font-weight:900;">📊 Monitoring Operasional</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-top:8px;">
+          ${card('Record ABSENSI', a.records ?? 0, deltaText(a.records, baseline.absensi))}
+          ${card('Siswa Unik', a.uniqueStudents ?? 0, deltaText(a.uniqueStudents, baseline.uniqueSiswa))}
+          ${card('Terlambat', a.terlambat ?? 0, deltaText(a.terlambat, baseline.terlambat), a.terlambat > baseline.terlambat ? 'warning' : '')}
+          ${card('Alpa', a.alpa ?? 0, deltaText(a.alpa, baseline.alpa), a.alpa > baseline.alpa ? 'warning' : '')}
+          ${card('Presensi Guru', t.records ?? 0, deltaText(t.records, baseline.guruAbsensi))}
+          ${card('WA Terkirim', w.sent ?? 0, deltaText(w.sent, baseline.waSent), 'success')}
+          ${card('WA Gagal', w.failed ?? 0, deltaText(w.failed, baseline.waFailed), w.failed > baseline.waFailed ? 'danger' : '')}
+        </div>`;
     } else {
-      h+='<div style="padding:14px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;"><b>⚪ Belum ada pilot aktif.</b><div style="font-size:12px;color:#64748b;margin-top:4px;">Mulai pilot untuk merekam baseline dan mengamati operasional sekolah selama periode uji.</div></div>';
+      h += `
+        <div style="padding:15px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+          <b>⚪ Belum ada pilot aktif.</b>
+          <div style="font-size:12px;color:#64748b;margin-top:5px;">
+            Mulai pilot untuk mencatat baseline dan memantau operasional sekolah selama periode uji.
+          </div>
+        </div>`;
     }
-    h+='<div style="margin-top:14px;font-weight:900;">🧪 Checklist Pilot</div>';
-    const c=d.checklist||{};
-    h+='<div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">';
-    (c.checks||[]).forEach(x=>{h+='<div style="padding:10px;border-radius:10px;background:'+(x.ready?'#f0fdf4':'#fffbeb')+';border:1px solid '+(x.ready?'#bbf7d0':'#fde68a')+';"><b>'+(x.ready?'✅':'⚠️')+' '+esc(x.label)+'</b><div style="font-size:11px;color:#64748b;margin-top:3px;">'+esc(x.detail)+'</div></div>';});
-    h+='</div>';
-    h+='<div style="margin-top:14px;font-weight:900;">📝 Catat Issue Pilot</div><div style="display:grid;grid-template-columns:120px 160px 1fr;gap:8px;margin-top:7px;align-items:center;"><select id="v9IssueLevel" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"><option>INFO</option><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select><input id="v9IssueModule" placeholder="Modul, mis. WA" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"><input id="v9IssueDesc" placeholder="Deskripsi masalah" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"></div><button id="v9IssueBtn" type="button" style="margin-top:8px;padding:8px 12px;border:0;border-radius:8px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">📝 Simpan Issue</button>';
-    h+='<div style="margin-top:14px;font-weight:900;">📚 Riwayat Pilot</div><div style="overflow:auto;margin-top:7px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Sekolah</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Mulai</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Selesai</th><th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Status</th></tr></thead><tbody>';
-    (d.history||[]).forEach(x=>{h+='<tr><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.school)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.start)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.end)+'</td><td style="padding:7px;border-bottom:1px solid #f1f5f9;">'+esc(x.status)+'</td></tr>';});
-    h+='</tbody></table></div>';
-    if(d.issues?.length){h+='<details style="margin-top:10px;"><summary style="font-weight:800;cursor:pointer;">Lihat 20 issue terakhir</summary><div style="overflow:auto;margin-top:7px;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th>ID</th><th>Level</th><th>Modul</th><th>Deskripsi</th><th>Status</th></tr></thead><tbody>';d.issues.forEach(x=>{h+='<tr><td>'+esc(x.id)+'</td><td>'+esc(x.level)+'</td><td>'+esc(x.module)+'</td><td>'+esc(x.description)+'</td><td>'+esc(x.status)+'</td></tr>';});h+='</tbody></table></div></details>';}
-    box.innerHTML=h;
-    btn('v9PilotCloseBtn',closePilot);btn('v9IssueBtn',saveIssue);
+
+    h += `
+      <div style="margin-top:15px;font-weight:900;">🧪 Checklist Pilot</div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;">`;
+
+    const checks = (d.checklist || {}).checks || [];
+    if (!checks.length) {
+      h += `<div style="font-size:12px;color:#64748b;">Belum ada data checklist.</div>`;
+    } else {
+      checks.forEach(x => {
+        h += `
+          <div style="padding:10px;border-radius:10px;
+            background:${x.ready ? '#f0fdf4' : '#fffbeb'};
+            border:1px solid ${x.ready ? '#bbf7d0' : '#fde68a'};">
+            <b>${x.ready ? '✅' : '⚠️'} ${esc(x.label)}</b>
+            <div style="font-size:11px;color:#64748b;margin-top:3px;">${esc(x.detail)}</div>
+          </div>`;
+      });
+    }
+
+    h += `</div>`;
+
+    h += `
+      <div style="margin-top:15px;font-weight:900;">📝 Catat Issue Pilot</div>
+      <div style="display:grid;grid-template-columns:120px 170px 1fr;gap:8px;margin-top:7px;align-items:center;">
+        <select id="v9IssueLevel" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;">
+          <option>INFO</option>
+          <option>LOW</option>
+          <option>MEDIUM</option>
+          <option>HIGH</option>
+          <option>CRITICAL</option>
+        </select>
+        <input id="v9IssueModule" placeholder="Modul, mis. WA"
+          style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;">
+        <input id="v9IssueDesc" placeholder="Deskripsi masalah"
+          style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;">
+      </div>
+      <button id="v9IssueBtn" type="button"
+        style="margin-top:8px;padding:8px 12px;border:0;border-radius:8px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">
+        📝 Simpan Issue
+      </button>`;
+
+    h += `
+      <div style="margin-top:15px;font-weight:900;">📚 Riwayat Pilot</div>
+      <div style="overflow:auto;margin-top:7px;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Sekolah</th>
+              <th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Mulai</th>
+              <th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Selesai</th>
+              <th style="text-align:left;padding:7px;border-bottom:1px solid #e2e8f0;">Status</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+    (d.history || []).forEach(x => {
+      h += `
+        <tr>
+          <td style="padding:7px;border-bottom:1px solid #f1f5f9;">${esc(x.school)}</td>
+          <td style="padding:7px;border-bottom:1px solid #f1f5f9;">${esc(x.start)}</td>
+          <td style="padding:7px;border-bottom:1px solid #f1f5f9;">${esc(x.end)}</td>
+          <td style="padding:7px;border-bottom:1px solid #f1f5f9;">${esc(x.status)}</td>
+        </tr>`;
+    });
+
+    h += `</tbody></table></div>`;
+
+    if (d.issues?.length) {
+      h += `
+        <details style="margin-top:10px;">
+          <summary style="font-weight:800;cursor:pointer;">
+            Lihat ${Math.min(d.issues.length,20)} issue terakhir
+          </summary>
+          <div style="overflow:auto;margin-top:7px;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr>
+                  <th>ID</th><th>Level</th><th>Modul</th><th>Deskripsi</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody>`;
+
+      d.issues.forEach(x => {
+        h += `
+          <tr>
+            <td>${esc(x.id)}</td>
+            <td>${esc(x.level)}</td>
+            <td>${esc(x.module)}</td>
+            <td>${esc(x.description)}</td>
+            <td>${esc(x.status)}</td>
+          </tr>`;
+      });
+
+      h += `</tbody></table></div></details>`;
+    }
+
+    box.innerHTML = h;
+
+    btn('v9PilotCloseBtn', closePilot);
+    btn('v9IssueBtn', saveIssue);
   }
-  async function refresh(){if(role()!=='ADMIN')return;try{msg('Memuat Pusat Pilot...','info');const r=await api('smartPilotDashboard');if(!r?.success)throw new Error(r?.message||'Gagal memuat pilot.');render(r.data||{});msg('Pusat Pilot siap.','success');}catch(e){msg(e.message||'Gagal memuat pilot.','error');}}
-  async function setup(){try{const r=await api('smartPilotSetup');if(!r?.success)throw new Error(r?.message||'Setup pilot gagal.');await refresh();}catch(e){msg(e.message||'Setup gagal.','error');}}
+
+  async function refresh(){
+    if (role() !== 'ADMIN') return;
+
+    try {
+      msg('Memuat data pilot...', 'info');
+
+      const r = await api('smartPilotDashboard');
+
+      if (!r?.success) {
+        throw new Error(r?.message || 'Gagal memuat pilot.');
+      }
+
+      render(r.data || {});
+      msg('Data pilot diperbarui.', 'success');
+    } catch (e) {
+      msg(e.message || 'Gagal memuat pilot.', 'error');
+    }
+  }
+
+  async function setup(){
+    try {
+      const r = await api('smartPilotSetup');
+
+      if (!r?.success) {
+        throw new Error(r?.message || 'Setup pilot gagal.');
+      }
+
+      await refresh();
+    } catch (e) {
+      msg(e.message || 'Setup gagal.', 'error');
+    }
+  }
+
+  function todayKey(){
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2,'0');
+    const d = String(now.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function addDays(dateKeyValue, days){
+    const d = new Date(dateKeyValue + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  function fmtDate(d){
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+
   async function startPilot(){
-    if(!confirm('Mulai pilot sekolah sekarang? Sistem hanya mencatat baseline dan monitoring, tidak membuat absensi palsu.'))return;
-    const school=prompt('Nama sekolah pilot:', ''); if(school===null)return;
-    const days=prompt('Durasi pilot (hari):','30'); if(days===null)return;
-    const n=Math.max(1,parseInt(days,10)||30);const now=new Date();const end=new Date(now.getTime()+(n-1)*86400000);
-    const fmt=x=>{const y=x.getFullYear(),m=String(x.getMonth()+1).padStart(2,'0'),d=String(x.getDate()).padStart(2,'0');return y+'-'+m+'-'+d;};
-    try{msg('Memulai pilot...','info');const r=await api('smartPilotStart',{payload:JSON.stringify({school:school.trim(),start:fmt(now),end:fmt(end),pic:'ADMIN',appVersion:'SMART-1.9.0',apiVersion:'SMART-1.9.0'})});if(!r?.success)throw new Error(r?.message||'Gagal memulai pilot.');await refresh();}catch(e){msg(e.message||'Gagal memulai pilot.','error');}
+    if (!confirm(
+      'Mulai pilot sekolah sekarang?\n\n' +
+      'Pilot hanya mencatat baseline dan monitoring. ' +
+      'Tidak membuat absensi test/palsu.'
+    )) return;
+
+    const school = prompt('Nama sekolah pilot:', '');
+    if (school === null) return;
+
+    const cleanSchool = school.trim();
+    if (!cleanSchool) {
+      msg('Nama sekolah pilot wajib diisi.', 'error');
+      return;
+    }
+
+    const daysInput = prompt(
+      'Durasi pilot dalam hari:',
+      '30'
+    );
+
+    if (daysInput === null) return;
+
+    const days = Math.max(
+      1,
+      parseInt(daysInput, 10) || 30
+    );
+
+    const start = todayKey();
+    const end = fmtDate(
+      addDays(start, days - 1)
+    );
+
+    try {
+      msg('Memulai pilot...', 'info');
+
+      const r = await api('smartPilotStart', {
+        payload: JSON.stringify({
+          school: cleanSchool,
+          start: start,
+          end: end,
+          pic: 'ADMIN',
+          appVersion: 'SMART-1.9.2',
+          apiVersion: 'SMART-1.9.2'
+        })
+      });
+
+      if (!r?.success) {
+        throw new Error(
+          r?.message || 'Gagal memulai pilot.'
+        );
+      }
+
+      await refresh();
+    } catch (e) {
+      msg(
+        e.message || 'Gagal memulai pilot.',
+        'error'
+      );
+    }
   }
-  async function closePilot(){if(!confirm('Tutup pilot aktif? Data absensi tidak akan dihapus.'))return;try{msg('Menutup pilot...','info');const r=await api('smartPilotClose');if(!r?.success)throw new Error(r?.message||'Gagal menutup pilot.');await refresh();}catch(e){msg(e.message||'Gagal menutup pilot.','error');}}
-  async function saveIssue(){const level=document.getElementById('v9IssueLevel')?.value||'INFO',module=document.getElementById('v9IssueModule')?.value||'',description=document.getElementById('v9IssueDesc')?.value||'';if(!description.trim()){msg('Deskripsi issue wajib diisi.','error');return;}try{msg('Menyimpan issue...','info');const r=await api('smartPilotIssue',{payload:JSON.stringify({level:level,module:module,description:description,pic:'ADMIN'})});if(!r?.success)throw new Error(r?.message||'Gagal menyimpan issue.');await refresh();}catch(e){msg(e.message||'Gagal menyimpan issue.','error');}}
-  function html(){return '<section id="'+PANEL_ID+'" style="margin:20px 0;padding:20px;border:1px solid #dbe4ee;border-radius:16px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06);"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;"><div><div style="font-size:12px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.08em;">SMART PRODUCT • ADMIN</div><h3 style="margin:4px 0;font-size:20px;">🧪 Pilot School Control Center</h3><div style="font-size:13px;color:#64748b;">Monitoring sekolah pilot selama ±1 bulan sebelum ekspansi ke sekolah berikutnya.</div></div><div style="display:flex;gap:7px;flex-wrap:wrap;"><button id="v9PilotStartBtn" type="button" style="padding:9px 12px;border:0;border-radius:9px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">▶️ Mulai Pilot</button><button id="v9PilotRefreshBtn" type="button" style="padding:9px 12px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;font-weight:800;cursor:pointer;">🔄 Refresh</button></div></div><div id="v9PilotMsg" style="margin-top:9px;font-size:13px;font-weight:700;"></div><div id="v9PilotContent" style="margin-top:10px;"><div style="color:#64748b;">Memuat...</div></div></section>';}
-  function inject(){if(role()!=='ADMIN')return false;const dash=document.getElementById('dashboard');if(!dash)return false;if(document.getElementById(PANEL_ID))return true;const w=document.createElement('div');w.innerHTML=html();const p=w.firstElementChild;if(!p)return false;dash.appendChild(p);btn('v9PilotStartBtn',startPilot);btn('v9PilotRefreshBtn',refresh);setup();return true;}
-  function remove(){if(role()!=='ADMIN')document.getElementById(PANEL_ID)?.remove();}
-  function start(){if(started)return;started=true;const run=()=>{remove();inject();};run();new MutationObserver(run).observe(document.body,{childList:true,subtree:true});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
-  window.v9SmartPilot={version:'SMART-1.9.0',refresh:refresh,start:startPilot,close:closePilot};
+
+  async function closePilot(){
+    if (!confirm(
+      'Tutup pilot aktif?\n\n' +
+      'Data absensi dan data operasional tidak akan dihapus.'
+    )) return;
+
+    try {
+      msg('Menutup pilot...', 'info');
+
+      const r = await api('smartPilotClose');
+
+      if (!r?.success) {
+        throw new Error(
+          r?.message || 'Gagal menutup pilot.'
+        );
+      }
+
+      await refresh();
+    } catch (e) {
+      msg(
+        e.message || 'Gagal menutup pilot.',
+        'error'
+      );
+    }
+  }
+
+  async function saveIssue(){
+    const level =
+      document.getElementById('v9IssueLevel')?.value || 'INFO';
+
+    const module =
+      document.getElementById('v9IssueModule')?.value || '';
+
+    const description =
+      document.getElementById('v9IssueDesc')?.value || '';
+
+    if (!description.trim()) {
+      msg('Deskripsi issue wajib diisi.', 'error');
+      return;
+    }
+
+    try {
+      msg('Menyimpan issue...', 'info');
+
+      const r = await api('smartPilotIssue', {
+        payload: JSON.stringify({
+          level: level,
+          module: module,
+          description: description.trim(),
+          pic: 'ADMIN'
+        })
+      });
+
+      if (!r?.success) {
+        throw new Error(
+          r?.message || 'Gagal menyimpan issue.'
+        );
+      }
+
+      await refresh();
+    } catch (e) {
+      msg(
+        e.message || 'Gagal menyimpan issue.',
+        'error'
+      );
+    }
+  }
+
+  function html(){
+    return `
+      <section id="${PANEL_ID}" style="
+        margin:20px 0;
+        padding:20px;
+        border:1px solid #dbe4ee;
+        border-radius:16px;
+        background:#fff;
+        box-shadow:0 6px 20px rgba(15,23,42,.06);
+      ">
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          gap:12px;
+          align-items:flex-start;
+          flex-wrap:wrap;
+        ">
+          <div>
+            <div style="
+              font-size:12px;
+              font-weight:700;
+              color:#0f766e;
+              text-transform:uppercase;
+              letter-spacing:.08em;
+            ">SMART PRODUCT • ADMIN</div>
+
+            <h3 style="
+              margin:4px 0;
+              font-size:20px;
+            ">🧪 Pilot School Control Center</h3>
+
+            <div style="
+              font-size:13px;
+              color:#64748b;
+            ">
+              Pusat monitoring pilot sekolah untuk periode uji operasional.
+            </div>
+          </div>
+
+          <div style="display:flex;gap:7px;flex-wrap:wrap;">
+            <button id="v9PilotStartBtn" type="button"
+              style="
+                padding:9px 12px;
+                border:0;
+                border-radius:9px;
+                background:#0f766e;
+                color:#fff;
+                font-weight:800;
+                cursor:pointer;
+              ">
+              ▶️ Mulai Pilot
+            </button>
+
+            <button id="v9PilotRefreshBtn" type="button"
+              style="
+                padding:9px 12px;
+                border:1px solid #cbd5e1;
+                border-radius:9px;
+                background:#fff;
+                font-weight:800;
+                cursor:pointer;
+              ">
+              🔄 Refresh
+            </button>
+          </div>
+        </div>
+
+        <div id="v9PilotMsg"
+          style="margin-top:9px;font-size:13px;font-weight:700;">
+        </div>
+
+        <div id="v9PilotContent" style="margin-top:10px;">
+          <div style="color:#64748b;">Memuat data pilot...</div>
+        </div>
+
+        <div style="
+          margin-top:12px;
+          padding-top:9px;
+          border-top:1px solid #eef2f7;
+          font-size:11px;
+          color:#94a3b8;
+        ">
+          Auto-refresh setiap 60 detik selama dashboard ADMIN terbuka.
+        </div>
+      </section>`;
+  }
+
+  function inject(){
+    if (role() !== 'ADMIN') return false;
+
+    const dash = document.getElementById('dashboard');
+    if (!dash) return false;
+
+    if (document.getElementById(PANEL_ID)) {
+      return true;
+    }
+
+    const w = document.createElement('div');
+    w.innerHTML = html();
+
+    const panel = w.firstElementChild;
+    if (!panel) return false;
+
+    dash.appendChild(panel);
+
+    btn('v9PilotStartBtn', startPilot);
+    btn('v9PilotRefreshBtn', refresh);
+
+    setup();
+
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+    }
+
+    refreshTimer = setInterval(() => {
+      if (role() === 'ADMIN' &&
+          document.getElementById(PANEL_ID)) {
+        refresh();
+      }
+    }, REFRESH_MS);
+
+    return true;
+  }
+
+  function remove(){
+    if (role() !== 'ADMIN') {
+      document.getElementById(PANEL_ID)?.remove();
+
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    }
+  }
+
+  function start(){
+    if (started) return;
+    started = true;
+
+    const run = () => {
+      remove();
+      inject();
+    };
+
+    run();
+
+    new MutationObserver(run).observe(
+      document.body,
+      { childList:true, subtree:true }
+    );
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener(
+      'DOMContentLoaded',
+      start,
+      { once:true }
+    );
+  } else {
+    start();
+  }
+
+  window.v9SmartPilot = {
+    version:'SMART-1.9.2',
+    refresh:refresh,
+    start:startPilot,
+    close:closePilot
+  };
 })();
 
 /* ========================================================================
- * END V9 SMART PRODUCTIZATION - PILOT SCHOOL CONTROL CENTER
+ * END V9.2 SMART PRODUCTIZATION - PILOT SCHOOL CONTROL CENTER
  * ======================================================================== */
+
+
+
+/* ========================================================================
+ * SMART ADMIN DASHBOARD CLEANUP
+ * ------------------------------------------------------------------------
+ * V4 Profil Sekolah dan V8 Wizard Sekolah Baru sudah dihentikan dari UI.
+ * Hapus node legacy bila versi lama sempat ter-inject oleh cache.
+ * ======================================================================== */
+(function(){
+  'use strict';
+
+  const LEGACY_IDS = [
+    'v4SmartSchoolProfilePanel',
+    'v8SmartNewSchoolWizardPanel'
+  ];
+
+  function cleanup(){
+    if (typeof currentUser !== 'undefined' &&
+        currentUser &&
+        String(currentUser.role || '').toUpperCase() === 'ADMIN') {
+      LEGACY_IDS.forEach(id => {
+        document.getElementById(id)?.remove();
+      });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', cleanup, {once:true});
+  } else {
+    cleanup();
+  }
+
+  new MutationObserver(cleanup).observe(
+    document.body,
+    {childList:true, subtree:true}
+  );
+})();
