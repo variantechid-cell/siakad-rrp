@@ -29,7 +29,7 @@
 ============================================================ */
 
 const API_URL =
-  'https://script.google.com/macros/s/AKfycbybMMhzrTv3Uqv3vMAdJTA5Co4FiTh_jZ4ocD5iNdHb2mZBX2S_BJJBrgFCgJIcqb21/exec';
+  'https://script.google.com/macros/s/AKfycbyG9NPbVI8JAbh46LecqG3WAOMviBQ7RBG_JNgKTh-N6AQb6aB4lRsZClP5i9oR8d7d/exec';
 
 const SESSION_KEY =
   'baitul_ulum_session_token';
